@@ -1,0 +1,12 @@
+# QuickNote configuration
+# Shortcut syntax follows Tauri's accelerator format, e.g. "Alt+Space", "CmdOrCtrl+Shift+N".
+shortcuts:
+  # Global hotkey (works even when the app is not focused) that toggles the quick-note popup.
+  toggle_note: "Alt+Space"
+  # Hotkey pressed *inside* the note window to save the note and close the popup.
+  save_note: "Alt+Enter"
+
+notes:
+  # Folder where the daily markdown files are stored, relative to the app's data directory
+  # (e.g. %APPDATA%/com.offnote.quicknote/notes on Windows). Use an absolute path to override.
+  directory: "notes"
