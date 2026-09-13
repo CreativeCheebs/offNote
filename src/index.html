@@ -8,7 +8,16 @@
   </head>
   <body>
     <div id="app">
-      <textarea id="note" placeholder="Type a note... (Alt+Enter to save, Esc to dismiss)" spellcheck="false"></textarea>
+      <!-- The editor is a transparent <textarea> layered over a <pre> backdrop
+           that mirrors the text and paints #tags. See main.js for the sync. -->
+      <div id="editor">
+        <pre id="backdrop" aria-hidden="true"><span id="highlights"></span></pre>
+        <textarea
+          id="note"
+          placeholder="Type a note... (Alt+Enter to save, Esc to dismiss)"
+          spellcheck="false"
+        ></textarea>
+      </div>
       <div id="status"></div>
     </div>
     <script type="module" src="main.js"></script>

@@ -20,22 +20,59 @@ body {
   gap: 6px;
 }
 
-#note {
+/* The textarea and its highlight backdrop are stacked in this box and must line
+   up pixel-for-pixel, so they share every text-metric property below. */
+#editor {
+  position: relative;
   flex: 1;
-  resize: none;
   border: 1px solid #3a3a3a;
   border-radius: 6px;
   background: #262626;
-  color: #f0f0f0;
+  overflow: hidden;
+}
+
+#note,
+#backdrop {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 10px;
+  border: 0;
+  font-family: -apple-system, "Segoe UI", sans-serif;
   font-size: 15px;
   line-height: 1.4;
-  padding: 10px;
+  /* Wrap identically so caret and highlight positions never diverge. */
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  overflow: auto;
+}
+
+#backdrop {
+  color: #f0f0f0;
+  pointer-events: none;
+  user-select: none;
+}
+
+#note {
+  resize: none;
+  background: transparent;
+  /* Text itself is transparent; the backdrop shows through and paints it. The
+     caret keeps its own color so the cursor stays visible. */
+  color: transparent;
+  caret-color: #f0f0f0;
   outline: none;
   user-select: text;
 }
 
 #note::placeholder {
   color: #777;
+}
+
+/* A #tag run, painted on the backdrop. */
+.tag {
+  color: #b39dff;
+  font-weight: 600;
 }
 
 #status {

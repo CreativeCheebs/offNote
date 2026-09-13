@@ -1,12 +1,66 @@
-# QuickNote configuration
-# Shortcut syntax follows Tauri's accelerator format, e.g. "Alt+Space", "CmdOrCtrl+Shift+N".
+# QuickNote configuration  (seed template)
+#
+# This file is a first-run TEMPLATE. On startup each app copies it to the shared
+# live config at  %APPDATA%\QuickNote\config.yaml  if that file does not exist.
+# BOTH the Tauri and WinForms apps read/write that single shared file, so edit
+# the copy in %APPDATA%\QuickNote (the "Reload Config" tray item reloads it).
+#
+# Shortcut syntax: combine Alt / Ctrl / Shift / Win with a key name,
+# e.g. "Alt+Space", "Ctrl+Shift+N".
 shortcuts:
-  # Global hotkey (works even when the app is not focused) that toggles the quick-note popup.
+  # Global hotkey (works even when the app is not focused) that toggles the popup.
   toggle_note: "Alt+Space"
-  # Hotkey pressed *inside* the note window to save the note and close the popup.
+  # Hotkey pressed *inside* the note window to save. Ctrl+Enter and Alt+Enter
+  # always work too, regardless of this setting.
   save_note: "Alt+Enter"
 
-notes:
-  # Folder where the daily markdown files are stored, relative to the app's data directory
-  # (e.g. %APPDATA%/com.offnote.quicknote/notes on Windows). Use an absolute path to override.
-  directory: "notes"
+# Every note is first written to a durable SQLite store at
+# %APPDATA%\QuickNote\quicknote.db (nothing is ever lost, even if a connection
+# below is unreachable), then delivered to its routed connection(s).
+#
+# Connections are the destinations a note can be written to. Each has a unique
+# `name` (referenced by routing below) and a `type`. Supported types:
+#
+#   markdown  - append to a daily markdown file in `path`.
+#   obsidian  - like markdown, but written into an Obsidian vault at `path`
+#               (inline #tags are preserved so Obsidian indexes them).
+#   logseq    - append a bullet to a Logseq journal file under `path/journals`.
+#   affine    - push the note into a self-hosted AFFiNE page over its sync API
+#               (requires the bundled Node connector; see connectors/affine).
+#
+# File-based paths may be absolute, or relative to %APPDATA%\QuickNote.
+connections:
+  - name: personal
+    type: markdown
+    path: "notes"
+
+  # - name: work
+  #   type: obsidian
+  #   path: "C:/Users/you/ObsidianVault"
+
+  # - name: ideas
+  #   type: logseq
+  #   path: "C:/Users/you/LogseqGraph"
+
+  # - name: cloud
+  #   type: affine
+  #   url: "https://alphacore.taila9d96c.ts.net:3010"
+  #   email: "test_user@demo.com"
+  #   password: "password"
+  #   workspace_id: "<workspaceId>"
+  #   # Append to today's journal, auto-created on the first note of each day:
+  #   journal: true
+  #   # ...or pin every note to one specific page instead:
+  #   # page_id: "<pageId>"
+
+# Routing decides which connection(s) a note is delivered to, based on its #tags.
+# A tag is a `#` immediately followed by non-space text (e.g. "#work"); "# heading"
+# is NOT a tag. A note may carry several tags and is delivered to each mapped
+# connection (deduplicated). A note with no tag - or a tag with no mapping here -
+# falls back to `default`.
+routing:
+  # tag -> connection name
+  tags: {}
+    # work: work
+    # idea: ideas
+  default: personal

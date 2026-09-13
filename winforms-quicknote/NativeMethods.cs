@@ -12,6 +12,13 @@ internal static class NativeMethods
 
     public const int WM_HOTKEY = 0x0312;
 
+    [DllImport("user32.dll")]
+    public static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    // Toggles painting on a control (0 = freeze, 1 = resume) to avoid flicker
+    // while re-coloring the note text.
+    public const int WM_SETREDRAW = 0x000B;
+
     [DllImport("dwmapi.dll")]
     public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int valueSize);
 

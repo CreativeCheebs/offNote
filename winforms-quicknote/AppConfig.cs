@@ -1,67 +1,71 @@
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
+
 namespace QuickNote;
 
-// Minimal hand-rolled reader for our specific two-section config.yaml shape.
-// Avoids pulling in a YAML NuGet package for three settings.
+/// A destination a note can be written to. `Type` selects the connector; `Path`
+/// is used by the file-based kinds (markdown/obsidian/logseq) and the remaining
+/// fields configure the `affine` connector.
+public sealed class Connection
+{
+    public string Name { get; set; } = "";
+    public string Type { get; set; } = "markdown";
+    public string? Path { get; set; }
+    public string? Url { get; set; }
+    public string? Email { get; set; }
+    public string? Password { get; set; }
+    public string? WorkspaceId { get; set; }
+    public string? PageId { get; set; }
+
+    /// affine: append to today's journal (auto-created if missing). Ignored when
+    /// PageId is set (an explicit pin wins).
+    public bool? Journal { get; set; }
+}
+
+public sealed class RoutingConfig
+{
+    /// tag -> connection name
+    public Dictionary<string, string> Tags { get; set; } = new();
+
+    /// connection used when a note has no tag (or only unmapped tags)
+    public string Default { get; set; } = "personal";
+}
+
+public sealed class ShortcutsConfig
+{
+    public string ToggleNote { get; set; } = "Alt+Space";
+    public string SaveNote { get; set; } = "Alt+Enter";
+}
+
 public sealed class AppConfig
 {
-    public string ToggleNote { get; private set; } = "Alt+Space";
-    public string SaveNote { get; private set; } = "Alt+Enter";
-    public string NotesDirectory { get; private set; } = "notes";
+    public ShortcutsConfig Shortcuts { get; set; } = new();
+    public List<Connection> Connections { get; set; } = new();
+    public RoutingConfig Routing { get; set; } = new();
+
+    // Convenience accessors used by the rest of the app.
+    public string ToggleNote => Shortcuts.ToggleNote;
+    public string SaveNote => Shortcuts.SaveNote;
+
+    public Connection? Connection(string name) =>
+        Connections.FirstOrDefault(c => c.Name == name);
 
     public static AppConfig Load(string path)
     {
-        var config = new AppConfig();
         if (!File.Exists(path))
         {
-            return config;
+            return new AppConfig();
         }
 
-        string section = "";
-        foreach (var rawLine in File.ReadAllLines(path))
-        {
-            var line = rawLine;
-            var hashIndex = line.IndexOf('#');
-            if (hashIndex >= 0)
-            {
-                line = line[..hashIndex];
-            }
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
+        // config.yaml uses snake_case keys (toggle_note, workspace_id, ...); map
+        // them to our PascalCase properties. UnderscoredNamingConvention turns
+        // "workspace_id" -> "WorkspaceId", "toggle_note" -> "ToggleNote", etc.
+        var deserializer = new DeserializerBuilder()
+            .WithNamingConvention(UnderscoredNamingConvention.Instance)
+            .IgnoreUnmatchedProperties()
+            .Build();
 
-            var indented = line.Length > 0 && char.IsWhiteSpace(line[0]);
-            var trimmed = line.Trim();
-
-            if (!indented)
-            {
-                section = trimmed.TrimEnd(':');
-                continue;
-            }
-
-            var separator = trimmed.IndexOf(':');
-            if (separator < 0)
-            {
-                continue;
-            }
-
-            var key = trimmed[..separator].Trim();
-            var value = trimmed[(separator + 1)..].Trim().Trim('"');
-
-            switch (section)
-            {
-                case "shortcuts" when key == "toggle_note":
-                    config.ToggleNote = value;
-                    break;
-                case "shortcuts" when key == "save_note":
-                    config.SaveNote = value;
-                    break;
-                case "notes" when key == "directory":
-                    config.NotesDirectory = value;
-                    break;
-            }
-        }
-
-        return config;
+        var config = deserializer.Deserialize<AppConfig>(File.ReadAllText(path));
+        return config ?? new AppConfig();
     }
 }

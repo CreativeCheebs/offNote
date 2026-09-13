@@ -10,6 +10,7 @@ public sealed class NoteForm : Form
     private static readonly Color BorderColor = Color.FromArgb(58, 58, 74);
     private static readonly Color AccentColor = Color.FromArgb(124, 108, 246);
     private static readonly Color AccentHoverColor = Color.FromArgb(144, 130, 250);
+    private static readonly Color TagColor = Color.FromArgb(179, 157, 255);
     private static readonly Color TextBoxBackColor = Color.FromArgb(32, 32, 42);
     private static readonly Color TextColor = Color.FromArgb(236, 236, 242);
     private static readonly Color HintColor = Color.FromArgb(188, 188, 202);
@@ -23,7 +24,8 @@ public sealed class NoteForm : Form
     private const float CelebrateDurationSeconds = 0.6f;
 
     private readonly Panel _textBoxBorder = new();
-    private readonly TextBox _textBox = new();
+    private readonly RichTextBox _textBox = new();
+    private bool _highlighting;
     private readonly Label _hintLabel = new();
     private readonly Button _saveButton = new();
     private readonly SparkleOverlay _sparkleOverlay = new();
@@ -56,7 +58,9 @@ public sealed class NoteForm : Form
 
     public NoteForm()
     {
-        _configPath = Path.Combine(AppContext.BaseDirectory, "config.yaml");
+        // Shared live config in %APPDATA%\QuickNote, seeded from the bundled
+        // template on first run (same file the Tauri app uses).
+        _configPath = AppPaths.LiveConfigPath();
 
         SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw, true);
 
@@ -112,14 +116,16 @@ public sealed class NoteForm : Form
         var textBoxInset = new Panel { Dock = DockStyle.Fill, BackColor = TextBoxBackColor, Padding = new Padding(10, 8, 10, 8) };
         _textBoxBorder.Controls.Add(textBoxInset);
 
+        // RichTextBox (not TextBox) so #tags can be colored inline as you type.
         _textBox.Multiline = true;
         _textBox.Dock = DockStyle.Fill;
         _textBox.BorderStyle = BorderStyle.None;
         _textBox.BackColor = TextBoxBackColor;
         _textBox.ForeColor = TextColor;
         _textBox.Font = new Font("Segoe UI", 11f);
-        _textBox.PlaceholderText = "Type a note...";
+        _textBox.AcceptsTab = true;
         _textBox.KeyDown += TextBox_KeyDown;
+        _textBox.TextChanged += (_, _) => HighlightTags();
         _textBox.Enter += (_, _) => _textBoxBorder.BackColor = AccentColor;
         _textBox.Leave += (_, _) => _textBoxBorder.BackColor = BorderColor;
         textBoxInset.Controls.Add(_textBox);
@@ -351,6 +357,43 @@ public sealed class NoteForm : Form
         _sparkleOverlay.Invalidate();
     }
 
+    // Re-color every #tag in the box. Runs on each TextChanged; changing
+    // SelectionColor does not itself raise TextChanged, but we guard anyway.
+    private void HighlightTags()
+    {
+        if (_highlighting)
+        {
+            return;
+        }
+        _highlighting = true;
+
+        // Freeze painting to avoid flicker while we walk the runs.
+        NativeMethods.SendMessage(_textBox.Handle, NativeMethods.WM_SETREDRAW, IntPtr.Zero, IntPtr.Zero);
+
+        var selStart = _textBox.SelectionStart;
+        var selLen = _textBox.SelectionLength;
+
+        _textBox.SelectAll();
+        _textBox.SelectionColor = TextColor;
+
+        foreach (System.Text.RegularExpressions.Match match in
+                 System.Text.RegularExpressions.Regex.Matches(_textBox.Text, @"(^|\s)(#[^\s#]+)"))
+        {
+            var tag = match.Groups[2];
+            _textBox.Select(tag.Index, tag.Length);
+            _textBox.SelectionColor = TagColor;
+        }
+
+        // Restore the caret/selection and make sure new typing uses the default color.
+        _textBox.Select(selStart, selLen);
+        _textBox.SelectionColor = TextColor;
+
+        NativeMethods.SendMessage(_textBox.Handle, NativeMethods.WM_SETREDRAW, new IntPtr(1), IntPtr.Zero);
+        _textBox.Invalidate();
+
+        _highlighting = false;
+    }
+
     protected override void WndProc(ref Message m)
     {
         if (m.Msg == NativeMethods.WM_HOTKEY && m.WParam.ToInt32() == HotkeyId)
@@ -421,12 +464,17 @@ public sealed class NoteForm : Form
             return;
         }
 
+        SaveOutcome outcome;
         try
         {
-            SaveNote(text, discard);
+            // Discarded drafts carry a #discarded tag so they route through the
+            // same tag rules as everything else (falling back to `default`).
+            var toSave = discard ? text + " #discarded" : text;
+            outcome = NoteRouter.Save(_config, toSave);
         }
         catch (Exception ex)
         {
+            // Only reached if the durable SQLite write itself failed.
             _hintLabel.Text = "Error saving note";
             _hintLabel.ForeColor = StatusDiscardColor;
             MessageBox.Show($"Failed to save note: {ex.Message}", "QuickNote",
@@ -434,7 +482,22 @@ public sealed class NoteForm : Form
             return;
         }
 
-        _hintLabel.Text = discard ? "Saved as #discarded" : "Saved";
+        // The note is safely in SQLite; `Pending` only means a connector was
+        // unreachable, so it's queued for later, not lost.
+        string where;
+        if (outcome.Pending.Count > 0)
+        {
+            where = $" - pending: {string.Join(", ", outcome.Pending)}";
+        }
+        else if (outcome.Delivered.Count > 0)
+        {
+            where = $" -> {string.Join(", ", outcome.Delivered)}";
+        }
+        else
+        {
+            where = "";
+        }
+        _hintLabel.Text = discard ? $"Saved as #discarded{where}" : $"Saved{where}";
         _hintLabel.ForeColor = discard ? StatusDiscardColor : StatusOkColor;
         _textBox.Enabled = false;
         _saveButton.Enabled = false;
@@ -446,40 +509,6 @@ public sealed class NoteForm : Form
 
         _closeTimer.Interval = discard ? DiscardCloseDelayMs : SaveCloseDelayMs;
         _closeTimer.Start();
-    }
-
-    private void SaveNote(string text, bool discard)
-    {
-        var dir = ResolveNotesDirectory();
-        Directory.CreateDirectory(dir);
-
-        var now = DateTime.Now;
-        var filePath = Path.Combine(dir, $"{now:yyyy-MM-dd}.md");
-        var isNew = !File.Exists(filePath);
-
-        using var writer = new StreamWriter(filePath, append: true);
-        if (isNew)
-        {
-            writer.WriteLine($"# {now:dddd, MMMM d yyyy}");
-            writer.WriteLine();
-        }
-
-        var heading = discard ? $"## {now:HH:mm:ss} #discarded" : $"## {now:HH:mm:ss}";
-        writer.WriteLine(heading);
-        writer.WriteLine();
-        writer.WriteLine(text);
-        writer.WriteLine();
-    }
-
-    private string ResolveNotesDirectory()
-    {
-        if (Path.IsPathRooted(_config.NotesDirectory))
-        {
-            return _config.NotesDirectory;
-        }
-
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        return Path.Combine(appData, "QuickNote", _config.NotesDirectory);
     }
 
     private void ExitApp()

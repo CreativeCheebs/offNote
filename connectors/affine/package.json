@@ -1,0 +1,11 @@
+{
+  "name": "quicknote-affine-connector",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Bundled Node connector that appends QuickNote notes into a self-hosted AFFiNE page. Invoked by both the Tauri and WinForms apps; reads a JSON job from stdin.",
+  "dependencies": {
+    "socket.io-client": "^4.8.3",
+    "yjs": "^13.6.32"
+  }
+}
