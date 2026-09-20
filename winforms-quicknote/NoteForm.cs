@@ -17,11 +17,24 @@ public sealed class NoteForm : Form
     private static readonly Color StatusOkColor = Color.FromArgb(140, 230, 170);
     private static readonly Color StatusDiscardColor = Color.FromArgb(240, 190, 120);
     private static readonly Color CelebrateGreen = Color.FromArgb(90, 224, 138);
-    private static readonly Color CelebrateGold = Color.FromArgb(255, 209, 102);
 
-    private const int SaveCloseDelayMs = 900;
+    // A wide, saturated palette so the celebration reads as "many different
+    // colors" rather than a two-tone accent flourish.
+    private static readonly Color[] ConfettiPalette =
+    {
+        Color.FromArgb(255, 92, 92),
+        Color.FromArgb(255, 159, 67),
+        Color.FromArgb(255, 217, 61),
+        Color.FromArgb(107, 203, 119),
+        Color.FromArgb(78, 205, 196),
+        Color.FromArgb(77, 150, 255),
+        Color.FromArgb(160, 108, 255),
+        Color.FromArgb(255, 110, 199),
+        Color.FromArgb(255, 255, 255),
+    };
+
     private const int DiscardCloseDelayMs = 450;
-    private const float CelebrateDurationSeconds = 0.6f;
+    private const float CelebrateDurationSeconds = 1.1f;
 
     private readonly Panel _textBoxBorder = new();
     private readonly RichTextBox _textBox = new();
@@ -47,6 +60,8 @@ public sealed class NoteForm : Form
         public float LifeSeconds;
         public float Size;
         public Color Color;
+        public float Rotation;
+        public float Spin;
     }
 
     private readonly string _configPath;
@@ -176,7 +191,7 @@ public sealed class NoteForm : Form
     private void SetupTrayIcon()
     {
         _trayIcon.Icon = Icon ?? SystemIcons.Application;
-        _trayIcon.Text = "QuickNote";
+        _trayIcon.Text = "Offnote";
         _trayIcon.Visible = true;
 
         var menu = new ContextMenuStrip();
@@ -197,7 +212,7 @@ public sealed class NoteForm : Form
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Invalid shortcut in config.yaml: {ex.Message}", "QuickNote",
+            MessageBox.Show($"Invalid shortcut in config.yaml: {ex.Message}", "Offnote",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
@@ -223,7 +238,7 @@ public sealed class NoteForm : Form
         {
             MessageBox.Show(
                 $"Could not register global hotkey '{_config.ToggleNote}'. It may already be in use by another app.",
-                "QuickNote", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                "Offnote", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -258,25 +273,24 @@ public sealed class NoteForm : Form
                 continue;
             }
             var color = Color.FromArgb(alpha, p.Color);
-            var size = p.Size * (1f - lifeT * 0.4f);
-            DrawSparkle(e.Graphics, p.Position, size, color);
+            var size = p.Size * (1f - lifeT * 0.25f);
+            DrawConfettiPiece(e.Graphics, p.Position, p.Rotation, size, color);
         }
     }
 
-    private static void DrawSparkle(Graphics g, PointF center, float size, Color color)
+    private static void DrawConfettiPiece(Graphics g, PointF center, float rotation, float size, Color color)
     {
         if (size <= 0.4f)
         {
             return;
         }
 
-        using var pen = new Pen(color, Math.Max(1f, size / 3f));
-        g.DrawLine(pen, center.X - size, center.Y, center.X + size, center.Y);
-        g.DrawLine(pen, center.X, center.Y - size, center.X, center.Y + size);
-
-        var diag = size * 0.6f;
-        g.DrawLine(pen, center.X - diag, center.Y - diag, center.X + diag, center.Y + diag);
-        g.DrawLine(pen, center.X - diag, center.Y + diag, center.X + diag, center.Y - diag);
+        var state = g.Save();
+        g.TranslateTransform(center.X, center.Y);
+        g.RotateTransform(rotation * (180f / MathF.PI));
+        using var brush = new SolidBrush(color);
+        g.FillRectangle(brush, -size / 2f, -size / 3f, size, size * 0.66f);
+        g.Restore(state);
     }
 
     private static Color LerpColor(Color a, Color b, float t)
@@ -293,21 +307,25 @@ public sealed class NoteForm : Form
         _celebrateElapsed = 0f;
         _particles.Clear();
 
-        var originScreen = _saveButton.PointToScreen(new Point(_saveButton.Width / 2, 0));
-        var origin = _sparkleOverlay.PointToClient(originScreen);
+        // Explode from the middle of the whole card, not just the save
+        // button, so the burst fills the window edge to edge.
+        var origin = new PointF(_sparkleOverlay.Width / 2f, _sparkleOverlay.Height * 0.35f);
 
-        for (var i = 0; i < 16; i++)
+        const int particleCount = 90;
+        for (var i = 0; i < particleCount; i++)
         {
-            var angle = (-MathF.PI / 2) + ((float)(_random.NextDouble() - 0.5) * MathF.PI * 0.9f);
-            var speed = 60f + ((float)_random.NextDouble() * 90f);
+            var angle = (float)(_random.NextDouble() * MathF.PI * 2);
+            var speed = 90f + ((float)_random.NextDouble() * 220f);
             _particles.Add(new Particle
             {
                 Position = origin,
                 Velocity = new PointF(MathF.Cos(angle) * speed, MathF.Sin(angle) * speed),
                 Age = 0f,
-                LifeSeconds = 0.5f + ((float)_random.NextDouble() * 0.35f),
-                Size = 2.5f + ((float)_random.NextDouble() * 2.5f),
-                Color = _random.NextDouble() < 0.5 ? CelebrateGreen : CelebrateGold,
+                LifeSeconds = 0.7f + ((float)_random.NextDouble() * 0.5f),
+                Size = 3f + ((float)_random.NextDouble() * 4f),
+                Color = ConfettiPalette[_random.Next(ConfettiPalette.Length)],
+                Rotation = (float)(_random.NextDouble() * MathF.PI * 2),
+                Spin = (float)((_random.NextDouble() - 0.5) * 10),
             });
         }
 
@@ -333,9 +351,10 @@ public sealed class NoteForm : Form
                 _particles.RemoveAt(i);
                 continue;
             }
-            p.Velocity.Y += 40f * dt;
+            p.Velocity.Y += 220f * dt;
             p.Position.X += p.Velocity.X * dt;
             p.Position.Y += p.Velocity.Y * dt;
+            p.Rotation += p.Spin * dt;
         }
 
         Invalidate();
@@ -477,7 +496,7 @@ public sealed class NoteForm : Form
             // Only reached if the durable SQLite write itself failed.
             _hintLabel.Text = "Error saving note";
             _hintLabel.ForeColor = StatusDiscardColor;
-            MessageBox.Show($"Failed to save note: {ex.Message}", "QuickNote",
+            MessageBox.Show($"Failed to save note: {ex.Message}", "Offnote",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             return;
         }
@@ -502,13 +521,18 @@ public sealed class NoteForm : Form
         _textBox.Enabled = false;
         _saveButton.Enabled = false;
 
-        if (!discard)
+        if (discard)
         {
-            TriggerCelebration();
+            _closeTimer.Interval = DiscardCloseDelayMs;
+            _closeTimer.Start();
+            return;
         }
 
-        _closeTimer.Interval = discard ? DiscardCloseDelayMs : SaveCloseDelayMs;
-        _closeTimer.Start();
+        // Close as soon as the note is saved - the confetti plays out on its
+        // own timer regardless of whether the window is still open, so there's
+        // no need to keep the popup around just to watch it.
+        TriggerCelebration();
+        HideNote();
     }
 
     private void ExitApp()

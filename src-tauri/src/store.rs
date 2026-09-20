@@ -84,6 +84,30 @@ pub fn mark_error(conn: &Connection, id: i64, error: &str) -> Result<(), String>
     Ok(())
 }
 
+/// Rows still awaiting delivery to at least one target: (id, data, targets).
+pub fn pending(conn: &Connection) -> Result<Vec<(i64, String, String)>, String> {
+    let mut stmt = conn
+        .prepare("SELECT id, data, targets FROM notes WHERE processed = 0")
+        .map_err(|e| format!("failed to prepare pending query: {e}"))?;
+    let rows = stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .map_err(|e| format!("failed to query pending notes: {e}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("failed to read pending notes: {e}"))
+}
+
+/// Narrow a row's remaining targets after a partial delivery, so the next
+/// retry only re-attempts what's still undelivered - never re-posts to a
+/// target that already succeeded.
+pub fn update_targets(conn: &Connection, id: i64, targets: &str) -> Result<(), String> {
+    conn.execute(
+        "UPDATE notes SET targets = ?1 WHERE id = ?2",
+        params![targets, id],
+    )
+    .map_err(|e| format!("failed to update targets: {e}"))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,6 +124,39 @@ mod tests {
             |r| r.get(0),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn pending_lists_only_unprocessed_rows() {
+        let path = std::env::temp_dir().join("qn_pending.db");
+        let _ = std::fs::remove_file(&path);
+
+        let conn = open(&path).unwrap();
+        let queued = insert(&conn, "2026-09-13T00:00:00Z", "still queued", "", "personal,cloud", "tauri").unwrap();
+        let done = insert(&conn, "2026-09-13T00:00:01Z", "already delivered", "", "personal", "tauri").unwrap();
+        mark_processed(&conn, done, "2026-09-13T00:00:02Z").unwrap();
+
+        let rows = pending(&conn).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, queued);
+        assert_eq!(rows[0].2, "personal,cloud");
+    }
+
+    #[test]
+    fn update_targets_narrows_to_undelivered_only() {
+        // Simulates a partial delivery: "personal" succeeded, "cloud" didn't.
+        // The retry must only re-attempt "cloud" - never "personal" again.
+        let path = std::env::temp_dir().join("qn_partial_delivery.db");
+        let _ = std::fs::remove_file(&path);
+
+        let conn = open(&path).unwrap();
+        let id = insert(&conn, "2026-09-13T00:00:00Z", "note", "", "personal,cloud", "tauri").unwrap();
+        update_targets(&conn, id, "cloud").unwrap();
+        mark_error(&conn, id, "cloud: unreachable").unwrap();
+
+        let rows = pending(&conn).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].2, "cloud");
     }
 
     #[test]

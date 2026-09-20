@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "confetti",
+  "description": "Capability for the save-celebration overlay window",
+  "windows": ["confetti"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:window:allow-hide",
+    "core:window:allow-set-ignore-cursor-events"
+  ]
+}

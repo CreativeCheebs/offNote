@@ -2,16 +2,24 @@
 import { io } from 'socket.io-client';
 import * as Y from 'yjs';
 
-// Base URL and client version come from config (passed via env by the caller);
-// the literals are the verified-working defaults for the demo server.
-export const BASE = process.env.AFFINE_BASE || 'https://alphacore.taila9d96c.ts.net:3010';
+// Base URL comes from config (passed via env by the caller, e.g.
+// affine-append.js sets AFFINE_BASE from the connection's `url` field);
+// the literal is only the fallback for local testing. This MUST be read
+// lazily (a function, not a const computed at import time) - callers set
+// process.env.AFFINE_BASE *after* importing this module, and a const would
+// have already frozen in the fallback before that assignment ever ran.
+function BASE() {
+  // Strip a trailing slash - "url/" + "/api/..." would otherwise become a
+  // double slash that some servers 404 on.
+  return (process.env.AFFINE_BASE || 'https://alphacore.taila9d96c.ts.net:3010').replace(/\/+$/, '');
+}
 export const CLIENT_VERSION = process.env.AFFINE_CLIENT_VERSION || '0.27.4';
 
 // Allow self-signed / tailscale cert
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 export async function signIn(email, password) {
-  const res = await fetch(`${BASE}/api/auth/sign-in`, {
+  const res = await fetch(`${BASE()}/api/auth/sign-in`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -25,7 +33,7 @@ export async function signIn(email, password) {
 }
 
 export async function gql(session, query, variables) {
-  const res = await fetch(`${BASE}/graphql`, {
+  const res = await fetch(`${BASE()}/graphql`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -41,7 +49,7 @@ export async function gql(session, query, variables) {
 
 export function connect(session) {
   return new Promise((resolve, reject) => {
-    const socket = io(BASE, {
+    const socket = io(BASE(), {
       transports: ['websocket'],
       extraHeaders: { Cookie: session.cookie },
       rejectUnauthorized: false,

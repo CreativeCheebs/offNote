@@ -5,13 +5,14 @@ use std::fs::{self, OpenOptions};
 use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -73,9 +74,9 @@ impl AppConfig {
 struct SaveResult {
     /// connection names the note was routed to
     targets: Vec<String>,
-    /// targets the note was delivered to right now
+    /// always empty: delivery is never attempted inline (see `save_note`)
     delivered: Vec<String>,
-    /// targets that failed; the note stays queued in SQLite for these
+    /// all routed targets, queued in SQLite for the background retry worker
     pending: Vec<String>,
     /// aggregated delivery error, if any (note is still saved durably)
     error: Option<String>,
@@ -83,6 +84,10 @@ struct SaveResult {
 
 struct AppState {
     toggle_shortcut: Mutex<Shortcut>,
+    /// Guards `retry_pending` against overlapping runs: the immediate
+    /// post-save attempt and the periodic sweep can otherwise land at the
+    /// same moment and double-attempt the same backlog row.
+    retry_running: AtomicBool,
 }
 
 /// The single data directory shared by both the Tauri and WinForms apps:
@@ -392,6 +397,80 @@ fn get_config(app: AppHandle) -> Result<AppConfig, String> {
     load_config(&app)
 }
 
+/// Fires the confetti celebration in its own always-on-top overlay window,
+/// independent of the note popup - so the popup can close the instant a note
+/// is saved without cutting the celebration off with it.
+#[tauri::command]
+fn trigger_celebration(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("confetti") {
+        window.show().map_err(|e| e.to_string())?;
+        // Both this window and "note" are always-on-top; show() alone doesn't
+        // reorder within that band, so without this the note popup (raised
+        // more recently, when it was opened) stays stacked above the confetti
+        // that just appeared underneath it.
+        window.set_focus().map_err(|e| e.to_string())?;
+        window.emit("celebrate", ()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Attempts delivery for every backlog row (processed = 0), so this single
+/// function serves both the immediate post-save push and the periodic sweep.
+/// A row's `targets` column is narrowed to whatever remains undelivered after
+/// each attempt, so a retry never re-posts to a target that already
+/// succeeded - important since a note can route to several connections and
+/// only some of them may be unreachable at any given moment.
+fn retry_pending(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    if state.retry_running.swap(true, Ordering::SeqCst) {
+        return; // another pass (immediate or periodic) is already in flight
+    }
+
+    let outcome: Result<(), String> = (|| {
+        let config = load_config(app)?;
+        let conn = store::open(&db_path()?)?;
+        for (id, data, targets_csv) in store::pending(&conn)? {
+            let targets: Vec<String> = targets_csv
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if targets.is_empty() {
+                let _ = store::mark_processed(&conn, id, &Utc::now().to_rfc3339());
+                continue;
+            }
+
+            let mut remaining = Vec::new();
+            let mut errors = Vec::new();
+            for name in &targets {
+                let result = match config.connection(name) {
+                    Some(c) => write_to_connection(app, c, &data),
+                    None => Err(format!(
+                        "routing points to connection '{name}' which is not defined"
+                    )),
+                };
+                if let Err(e) = result {
+                    remaining.push(name.clone());
+                    errors.push(format!("{name}: {e}"));
+                }
+            }
+
+            if remaining.is_empty() {
+                let _ = store::mark_processed(&conn, id, &Utc::now().to_rfc3339());
+            } else {
+                let _ = store::update_targets(&conn, id, &remaining.join(","));
+                let _ = store::mark_error(&conn, id, &errors.join("; "));
+            }
+        }
+        Ok(())
+    })();
+
+    if let Err(e) = outcome {
+        eprintln!("retry_pending failed: {e}");
+    }
+    state.retry_running.store(false, Ordering::SeqCst);
+}
+
 #[tauri::command]
 fn save_note(app: AppHandle, text: String) -> Result<SaveResult, String> {
     let trimmed = text.trim();
@@ -408,10 +487,13 @@ fn save_note(app: AppHandle, text: String) -> Result<SaveResult, String> {
     let tags = extract_tags(trimmed);
     let target_names = resolve_targets(&config, &tags);
 
-    // Durable store FIRST: the note is safe even if every connector is down.
-    // A failure here is the only fatal case, since we can't guarantee the note.
+    // Durable store, and ONLY that, before returning: delivery (which may
+    // block on a slow or unreachable connector, e.g. affine over the network)
+    // happens in the background so the caller can close the note popup
+    // immediately regardless of network state. `retry_pending` below picks
+    // this row up right away, and again every 30s until it succeeds.
     let conn = store::open(&db_path()?)?;
-    let id = store::insert(
+    store::insert(
         &conn,
         &Utc::now().to_rfc3339(),
         trimmed,
@@ -420,42 +502,14 @@ fn save_note(app: AppHandle, text: String) -> Result<SaveResult, String> {
         "tauri",
     )?;
 
-    // Then attempt delivery. Connector failures are non-fatal: the row stays at
-    // processed = 0 as backlog and we tell the UI what's still pending.
-    let mut delivered = Vec::new();
-    let mut pending = Vec::new();
-    let mut errors = Vec::new();
-    for name in &target_names {
-        let result = match config.connection(name) {
-            Some(c) => write_to_connection(&app, c, trimmed),
-            None => Err(format!(
-                "routing points to connection '{name}' which is not defined"
-            )),
-        };
-        match result {
-            Ok(()) => delivered.push(name.clone()),
-            Err(e) => {
-                pending.push(name.clone());
-                errors.push(format!("{name}: {e}"));
-            }
-        }
-    }
-
-    if errors.is_empty() {
-        let _ = store::mark_processed(&conn, id, &Utc::now().to_rfc3339());
-    } else {
-        let _ = store::mark_error(&conn, id, &errors.join("; "));
-    }
+    let handle = app.clone();
+    std::thread::spawn(move || retry_pending(&handle));
 
     Ok(SaveResult {
-        targets: target_names,
-        delivered,
-        pending,
-        error: if errors.is_empty() {
-            None
-        } else {
-            Some(errors.join("; "))
-        },
+        targets: target_names.clone(),
+        delivered: vec![],
+        pending: target_names,
+        error: None,
     })
 }
 
@@ -557,7 +611,8 @@ pub fn run() {
             get_config,
             save_note,
             hide_note_window,
-            reload_config
+            reload_config,
+            trigger_celebration
         ])
         .setup(|app| {
             let handle = app.handle().clone();
@@ -565,7 +620,47 @@ pub fn run() {
             let shortcut = register_toggle_shortcut(&handle, &config.shortcuts.toggle_note)?;
             app.manage(AppState {
                 toggle_shortcut: Mutex::new(shortcut),
+                retry_running: AtomicBool::new(false),
             });
+
+            // Periodic sweep so a note queued while offline (or while a
+            // connector is down) still goes out on its own once the network
+            // or server recovers, without requiring another save to trigger it.
+            {
+                let retry_handle = handle.clone();
+                std::thread::spawn(move || loop {
+                    std::thread::sleep(std::time::Duration::from_secs(30));
+                    retry_pending(&retry_handle);
+                });
+            }
+
+            // A separate, click-through, full-screen overlay for the save
+            // celebration - kept apart from the note window so the popup can
+            // hide the instant a note is saved without cutting the confetti
+            // off with it.
+            let confetti_builder =
+                WebviewWindowBuilder::new(&handle, "confetti", WebviewUrl::App("confetti.html".into()))
+                    .title("Offnote Celebration")
+                    .decorations(false)
+                    .transparent(true)
+                    .always_on_top(true)
+                    .skip_taskbar(true)
+                    .visible(false)
+                    .resizable(false)
+                    .focused(false)
+                    .shadow(false);
+            let confetti_builder = match handle.primary_monitor() {
+                Ok(Some(monitor)) => {
+                    let scale = monitor.scale_factor();
+                    let size = monitor.size();
+                    let position = monitor.position();
+                    confetti_builder
+                        .inner_size(size.width as f64 / scale, size.height as f64 / scale)
+                        .position(position.x as f64 / scale, position.y as f64 / scale)
+                }
+                _ => confetti_builder.inner_size(1024.0, 768.0),
+            };
+            confetti_builder.build()?;
 
             let reload_item = MenuItem::with_id(app, "reload", "Reload Config", true, None::<&str>)?;
             let exit_item = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?;
@@ -573,7 +668,7 @@ pub fn run() {
 
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("QuickNote")
+                .tooltip("Offnote")
                 .menu(&tray_menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {

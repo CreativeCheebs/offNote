@@ -1,0 +1,12 @@
+{
+  "name": "quicknote-setup",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "description": "Interactive CLI to validate QuickNote's config.yaml and help configure connections (AFFiNE workspace/page discovery, file-path checks, routing).",
+  "dependencies": {
+    "socket.io-client": "^4.8.3",
+    "yaml": "^2.9.1",
+    "yjs": "^13.6.32"
+  }
+}

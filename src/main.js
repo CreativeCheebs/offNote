@@ -87,6 +87,11 @@ async function saveAndClose() {
     await win.hide();
     return;
   }
+  // Fire the confetti in its own overlay window the instant save is
+  // triggered, not awaited: it runs independently of this window closing,
+  // and the note is durably queued in SQLite regardless of how long
+  // connector delivery takes, so the reward shouldn't wait on either.
+  invoke("trigger_celebration").catch((err) => console.error("trigger_celebration failed", err));
   try {
     const result = await invoke("save_note", { text });
     const delivered = result?.delivered ?? [];
@@ -108,9 +113,6 @@ async function saveAndClose() {
   }
   noteEl.value = "";
   renderHighlights();
-  setTimeout(() => {
-    statusEl.textContent = "";
-  }, 1200);
   await win.hide();
 }
 
@@ -138,6 +140,8 @@ listen("note-shown", () => {
   noteEl.value = "";
   renderHighlights();
   statusEl.textContent = "";
+  confettiParticles = [];
+  confettiEl.getContext("2d").clearRect(0, 0, confettiEl.width, confettiEl.height);
   noteEl.focus();
 });
 
