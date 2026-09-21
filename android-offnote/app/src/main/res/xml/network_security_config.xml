@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  This is the PUBLIC placeholder version of this file. If your AFFiNE sidecar
+  (connectors/affine-sidecar) serves plain HTTP rather than HTTPS, Android
+  blocks cleartext traffic to it by default - you need a domain-config
+  exception naming your own host, like the one below.
+
+  Don't edit this file with your real host. Instead, create
+  app/src/debug/res/xml/network_security_config.xml (same filename, under
+  src/debug/ instead of src/main/) with your real domain - Gradle merges
+  debug-variant resources over main ones, and that file is gitignored so
+  your private host never ends up in this public template.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">your-affine-host.example.com</domain>
+    </domain-config>
+</network-security-config>

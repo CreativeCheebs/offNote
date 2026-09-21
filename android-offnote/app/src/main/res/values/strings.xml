@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Offnote</string>
+    <string name="notif_channel_capture">Quick capture</string>
+    <string name="notif_channel_capture_desc">Persistent lockscreen note capture</string>
+    <string name="notif_title">Offnote</string>
+    <string name="notif_text">Tap to jot a quick note</string>
+    <string name="notif_action_add">Add note</string>
+    <string name="notif_reply_label">Type your note…</string>
+</resources>

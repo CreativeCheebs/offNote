@@ -3,23 +3,20 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace QuickNote;
 
-/// A destination a note can be written to. `Type` selects the connector; `Path`
-/// is used by the file-based kinds (markdown/obsidian/logseq) and the remaining
-/// fields configure the `affine` connector.
+/// A destination a note can be written to. `Type` selects the connector;
+/// `Path` is used by the file-based kinds (markdown/obsidian/logseq). The
+/// `affine` kind never holds AFFiNE credentials here - those live
+/// server-side in the sidecar's own connectors.json (see
+/// connectors/affine-sidecar); this only names which sidecar connector to
+/// call, matching the Android app's config shape.
 public sealed class Connection
 {
     public string Name { get; set; } = "";
     public string Type { get; set; } = "markdown";
     public string? Path { get; set; }
-    public string? Url { get; set; }
-    public string? Email { get; set; }
-    public string? Password { get; set; }
-    public string? WorkspaceId { get; set; }
-    public string? PageId { get; set; }
-
-    /// affine: append to today's journal (auto-created if missing). Ignored when
-    /// PageId is set (an explicit pin wins).
-    public bool? Journal { get; set; }
+    public string? SidecarUrl { get; set; }
+    public string? SidecarToken { get; set; }
+    public string? SidecarConnector { get; set; }
 }
 
 public sealed class RoutingConfig

@@ -2,16 +2,24 @@
 import { io } from 'socket.io-client';
 import * as Y from 'yjs';
 
-// Base URL comes from config (passed via env by the caller, e.g.
-// affine-append.js sets AFFINE_BASE from the connection's `url` field);
-// the literal is only the fallback for local testing. This MUST be read
-// lazily (a function, not a const computed at import time) - callers set
-// process.env.AFFINE_BASE *after* importing this module, and a const would
-// have already frozen in the fallback before that assignment ever ran.
+// Base URL comes from config (passed via env by the caller - e.g.
+// append-core.js's appendNote() sets AFFINE_BASE from a connector's `base`
+// field). No hardcoded fallback: every deployment has a different self-hosted
+// AFFiNE host, so silently defaulting to *someone's* host is worse than
+// failing loudly. This MUST be read lazily (a function, not a const computed
+// at import time) - callers set process.env.AFFINE_BASE *after* importing
+// this module, and a const would have already frozen in before that
+// assignment ever ran.
 function BASE() {
+  if (!process.env.AFFINE_BASE) {
+    throw new Error(
+      'AFFINE_BASE is not set - configure a "base" (or "url") field on the connector, ' +
+        'or set the AFFINE_BASE env var to your self-hosted AFFiNE URL',
+    );
+  }
   // Strip a trailing slash - "url/" + "/api/..." would otherwise become a
   // double slash that some servers 404 on.
-  return (process.env.AFFINE_BASE || 'https://alphacore.taila9d96c.ts.net:3010').replace(/\/+$/, '');
+  return process.env.AFFINE_BASE.replace(/\/+$/, '');
 }
 export const CLIENT_VERSION = process.env.AFFINE_CLIENT_VERSION || '0.27.4';
 

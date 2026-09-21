@@ -25,8 +25,8 @@ shortcuts:
 #   obsidian  - like markdown, but written into an Obsidian vault at `path`
 #               (inline #tags are preserved so Obsidian indexes them).
 #   logseq    - append a bullet to a Logseq journal file under `path/journals`.
-#   affine    - push the note into a self-hosted AFFiNE page over its sync API
-#               (requires the bundled Node connector; see connectors/affine).
+#   affine    - push the note into a self-hosted AFFiNE page via the sidecar
+#               service (see connectors/affine-sidecar) - no credentials here.
 #
 # File-based paths may be absolute, or relative to %APPDATA%\QuickNote.
 connections:
@@ -44,14 +44,12 @@ connections:
 
   # - name: cloud
   #   type: affine
-  #   url: "https://alphacore.taila9d96c.ts.net:3010"
-  #   email: "test_user@demo.com"
-  #   password: "password"
-  #   workspace_id: "<workspaceId>"
-  #   # Append to today's journal, auto-created on the first note of each day:
-  #   journal: true
-  #   # ...or pin every note to one specific page instead:
-  #   # page_id: "<pageId>"
+  #   # AFFiNE credentials are never stored here - they live server-side in
+  #   # the sidecar's own connectors.json (see connectors/affine-sidecar).
+  #   # This just points at the sidecar and names which of its connectors to use.
+  #   sidecar_url: "http://your-affine-host:8787"
+  #   sidecar_token: "<sidecar token>"
+  #   sidecar_connector: "<name from the sidecar's connectors.json>"
 
 # Routing decides which connection(s) a note is delivered to, based on its #tags.
 # A tag is a `#` immediately followed by non-space text (e.g. "#work"); "# heading"

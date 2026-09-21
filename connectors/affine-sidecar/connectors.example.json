@@ -1,0 +1,10 @@
+{
+  "affine_braindump": {
+    "type": "affine",
+    "email": "you@example.com",
+    "password": "your-affine-password",
+    "workspaceId": "your-workspace-id",
+    "journal": true,
+    "base": "https://your-affine-host:3010"
+  }
+}

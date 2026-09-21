@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write as _;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
@@ -22,8 +21,11 @@ struct ShortcutsConfig {
 }
 
 /// A destination a note can be written to. `kind` selects the connector;
-/// `path` is used by the file-based kinds (markdown/obsidian/logseq) and the
-/// remaining fields configure the `affine` connector.
+/// `path` is used by the file-based kinds (markdown/obsidian/logseq). The
+/// `affine` kind never holds AFFiNE credentials here - those live
+/// server-side in the sidecar's own connectors.json (see
+/// connectors/affine-sidecar); this only names which sidecar connector to
+/// call, matching the Android app's config shape.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct Connection {
     name: String,
@@ -32,19 +34,11 @@ struct Connection {
     #[serde(default)]
     path: Option<String>,
     #[serde(default)]
-    url: Option<String>,
+    sidecar_url: Option<String>,
     #[serde(default)]
-    email: Option<String>,
+    sidecar_token: Option<String>,
     #[serde(default)]
-    password: Option<String>,
-    #[serde(default)]
-    workspace_id: Option<String>,
-    #[serde(default)]
-    page_id: Option<String>,
-    /// affine: append to today's journal (auto-created if missing). Ignored when
-    /// `page_id` is set (an explicit pin wins).
-    #[serde(default)]
-    journal: Option<bool>,
+    sidecar_connector: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -205,31 +199,6 @@ fn resolve_targets(config: &AppConfig, tags: &[String]) -> Vec<String> {
     names
 }
 
-/// Path to the bundled AFFiNE Node connector (connectors/affine/affine-append.js).
-fn affine_script_path(app: &AppHandle) -> Result<PathBuf, String> {
-    // Bundled as a resource in release builds.
-    if let Ok(res) = app.path().resolve(
-        "connectors/affine/affine-append.js",
-        tauri::path::BaseDirectory::Resource,
-    ) {
-        if res.exists() {
-            return Ok(res);
-        }
-    }
-    // Dev: repo root is the parent of src-tauri.
-    let dev = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(|p| p.join("connectors/affine/affine-append.js"))
-        .ok_or_else(|| "cannot resolve repo root for affine connector".to_string())?;
-    if dev.exists() {
-        return Ok(dev);
-    }
-    Err(format!(
-        "affine connector script not found (looked for {})",
-        dev.display()
-    ))
-}
-
 /// Append `text` to a daily markdown file (used by markdown and obsidian kinds).
 fn write_markdown(dir: &PathBuf, text: &str) -> Result<(), String> {
     fs::create_dir_all(dir).map_err(|e| format!("failed to create dir {}: {e}", dir.display()))?;
@@ -267,80 +236,41 @@ fn write_logseq(dir: &PathBuf, text: &str) -> Result<(), String> {
     writeln!(file, "- {time} {body}").map_err(|e| format!("failed to write note: {e}"))
 }
 
-/// Push `text` into an AFFiNE page by shelling out to the bundled Node connector.
-fn write_affine(app: &AppHandle, conn: &Connection, text: &str) -> Result<(), String> {
-    let email = conn
-        .email
+/// Push `text` into AFFiNE via the HTTP sidecar (connectors/affine-sidecar).
+/// The sidecar - not this app - holds the actual AFFiNE credentials and runs
+/// the socket.io + Yjs CRDT sync; this is a plain authenticated POST.
+fn write_affine(_app: &AppHandle, conn: &Connection, text: &str) -> Result<(), String> {
+    let sidecar_url = conn
+        .sidecar_url
         .as_ref()
-        .ok_or("affine connection missing 'email'")?;
-    let password = conn
-        .password
+        .ok_or_else(|| format!("connection '{}' missing 'sidecar_url'", conn.name))?;
+    let sidecar_token = conn
+        .sidecar_token
         .as_ref()
-        .ok_or("affine connection missing 'password'")?;
-    let workspace_id = conn
-        .workspace_id
+        .ok_or_else(|| format!("connection '{}' missing 'sidecar_token'", conn.name))?;
+    let sidecar_connector = conn
+        .sidecar_connector
         .as_ref()
-        .ok_or("affine connection missing 'workspace_id'")?;
-    let journal = conn.journal.unwrap_or(false);
-    if conn.page_id.is_none() && !journal {
-        return Err("affine connection needs either 'page_id' or 'journal: true'".into());
-    }
+        .ok_or_else(|| format!("connection '{}' missing 'sidecar_connector'", conn.name))?;
 
-    let script = affine_script_path(app)?;
-    let cwd = script
-        .parent()
-        .ok_or("cannot resolve affine connector directory")?;
-
-    let mut job = serde_json::json!({
-        "email": email,
-        "password": password,
-        "workspaceId": workspace_id,
+    let url = format!("{}/append", sidecar_url.trim_end_matches('/'));
+    let body = serde_json::json!({
+        "connector": sidecar_connector,
         "texts": [text],
     });
-    if let Some(url) = &conn.url {
-        job["base"] = serde_json::Value::String(url.clone());
-    }
-    // page_id pins to a specific page; otherwise journal mode targets today's.
-    if let Some(page_id) = &conn.page_id {
-        job["pageId"] = serde_json::Value::String(page_id.clone());
-    }
-    if journal {
-        job["journal"] = serde_json::Value::Bool(true);
-    }
 
-    let mut cmd = Command::new("node");
-    cmd.arg(&script)
-        .current_dir(cwd)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        cmd.creation_flags(CREATE_NO_WINDOW);
-    }
+    let response = ureq::post(&url)
+        .set("Authorization", &format!("Bearer {sidecar_token}"))
+        .send_json(body);
 
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("failed to launch node for affine connector: {e} (is Node installed and on PATH?)"))?;
-    {
-        let stdin = child
-            .stdin
-            .as_mut()
-            .ok_or("failed to open affine connector stdin")?;
-        stdin
-            .write_all(job.to_string().as_bytes())
-            .map_err(|e| format!("failed to send job to affine connector: {e}"))?;
+    match response {
+        Ok(_) => Ok(()),
+        Err(ureq::Error::Status(status, resp)) => {
+            let body = resp.into_string().unwrap_or_default();
+            Err(format!("sidecar returned {status}: {body}"))
+        }
+        Err(e) => Err(format!("failed to reach affine sidecar: {e}")),
     }
-    let output = child
-        .wait_with_output()
-        .map_err(|e| format!("affine connector did not complete: {e}"))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("affine connector failed: {}", stderr.trim()));
-    }
-    Ok(())
 }
 
 fn write_to_connection(app: &AppHandle, conn: &Connection, text: &str) -> Result<(), String> {

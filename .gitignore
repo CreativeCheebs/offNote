@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Sidecar's real connector credentials and token (see .example files for the shape)
+connectors/affine-sidecar/connectors.json
+connectors/affine-sidecar/.env
+
+# Android app's real (private) Tailscale/AFFiNE host - see the placeholder in
+# src/main for why this lives in a gitignored debug-variant override instead.
+android-offnote/app/src/debug/res/xml/network_security_config.xml
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

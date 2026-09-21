@@ -1,0 +1,13 @@
+[Unit]
+Description=Offnote AFFiNE sidecar
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/affine/offnote-sidecar/affine-sidecar
+ExecStart=/usr/bin/env node --env-file=.env server.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

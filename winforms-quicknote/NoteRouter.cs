@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 
@@ -200,82 +200,49 @@ public static class NoteRouter
         writer.WriteLine($"- {now:HH:mm} {body}");
     }
 
+    private static readonly HttpClient s_http = new() { Timeout = TimeSpan.FromSeconds(20) };
+
+    /// Push `text` into AFFiNE via the HTTP sidecar (connectors/affine-sidecar).
+    /// The sidecar - not this app - holds the actual AFFiNE credentials and
+    /// runs the socket.io + Yjs CRDT sync; this is a plain authenticated POST.
     private static void WriteAffine(Connection conn, string text)
     {
-        var journal = conn.Journal ?? false;
-        if (string.IsNullOrEmpty(conn.Email) || string.IsNullOrEmpty(conn.Password)
-            || string.IsNullOrEmpty(conn.WorkspaceId))
+        if (string.IsNullOrEmpty(conn.SidecarUrl) || string.IsNullOrEmpty(conn.SidecarToken)
+            || string.IsNullOrEmpty(conn.SidecarConnector))
         {
             throw new InvalidOperationException(
-                "affine connection requires email, password, workspace_id");
-        }
-        if (string.IsNullOrEmpty(conn.PageId) && !journal)
-        {
-            throw new InvalidOperationException(
-                "affine connection needs either page_id or journal: true");
+                $"connection '{conn.Name}' requires sidecar_url, sidecar_token, sidecar_connector");
         }
 
-        var script = FindAffineScript();
-        var jobFields = new Dictionary<string, object?>
+        var body = JsonSerializer.Serialize(new
         {
-            ["base"] = conn.Url,
-            ["email"] = conn.Email,
-            ["password"] = conn.Password,
-            ["workspaceId"] = conn.WorkspaceId,
-            ["texts"] = new[] { text },
-        };
-        // page_id pins to a specific page; otherwise journal mode targets today's.
-        if (!string.IsNullOrEmpty(conn.PageId)) jobFields["pageId"] = conn.PageId;
-        if (journal) jobFields["journal"] = true;
-        var job = JsonSerializer.Serialize(jobFields);
+            connector = conn.SidecarConnector,
+            texts = new[] { text },
+        });
 
-        var psi = new ProcessStartInfo
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post, $"{conn.SidecarUrl.TrimEnd('/')}/append")
         {
-            FileName = "node",
-            ArgumentList = { script },
-            WorkingDirectory = Path.GetDirectoryName(script)!,
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
         };
+        request.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", conn.SidecarToken);
 
-        Process proc;
+        HttpResponseMessage response;
         try
         {
-            proc = Process.Start(psi) ?? throw new InvalidOperationException("failed to start node");
+            response = s_http.Send(request);
         }
         catch (Exception ex)
         {
+            throw new InvalidOperationException($"failed to reach affine sidecar: {ex.Message}");
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             throw new InvalidOperationException(
-                $"failed to launch node for affine connector: {ex.Message} (is Node installed and on PATH?)");
+                $"sidecar returned {(int)response.StatusCode}: {responseBody}");
         }
-
-        proc.StandardInput.Write(job);
-        proc.StandardInput.Close();
-        var stderr = proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
-        if (proc.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"affine connector failed: {stderr.Trim()}");
-        }
-    }
-
-    /// Walk up from the exe directory to find connectors/affine/affine-append.js.
-    private static string FindAffineScript()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            var candidate = Path.Combine(dir.FullName, "connectors", "affine", "affine-append.js");
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException(
-            "affine connector script not found (looked for connectors/affine/affine-append.js above the exe)");
     }
 }
