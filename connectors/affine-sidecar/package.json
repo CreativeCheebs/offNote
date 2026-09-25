@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "private": true,
-  "description": "Standalone HTTP service exposing POST /append, so the Android app can deliver notes to AFFiNE without embedding a Node/Yjs runtime in the APK. Deploy this whole directory (plus connectors/affine, which it imports) next to the AFFiNE server.",
+  "description": "Self-contained HTTP service exposing POST /append, so Offnote clients (Android, Tauri, WinForms) can deliver notes to AFFiNE without holding credentials or running the Yjs/socket.io sync themselves. Deploy this single directory next to the AFFiNE server; run install.sh.",
   "scripts": {
     "start": "node server.js"
   },

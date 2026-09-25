@@ -19,8 +19,8 @@ import { io } from "socket.io-client";
 import * as Y from "yjs";
 
 // Self-hosted AFFiNE servers commonly sit behind a self-signed / Tailscale
-// cert; the bundled connector (connectors/affine/lib.js) accepts the same
-// trade-off, so this tool matches it rather than failing every real setup.
+// cert; the AFFiNE sidecar (connectors/affine-sidecar/lib.js) accepts the
+// same trade-off, so this tool matches it rather than failing every real setup.
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
