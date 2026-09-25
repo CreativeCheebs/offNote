@@ -111,7 +111,10 @@ if command -v tailscale >/dev/null 2>&1; then
   TS_IP="$(tailscale ip -4 2>/dev/null || true)"
   [[ -n "$TS_IP" ]] && echo "  Tailscale:  http://$TS_IP:${PORT}"
 fi
-hostname -I 2>/dev/null | tr ' ' '\n' | grep -v '^$' | while read -r ip; do
+
+# Real LAN addresses only - hostname -I also lists every Docker bridge
+# network (172.17-31.x.x), which is never what a client should connect to.
+hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^(192\.168\.|10\.)' | while read -r ip; do
   echo "  LAN:        http://$ip:${PORT}"
 done
 
