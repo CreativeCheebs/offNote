@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -299,6 +300,25 @@ fn write_to_connection(app: &AppHandle, conn: &Connection, text: &str) -> Result
     }
 }
 
+/// Shows the settings window, creating it lazily on first use (unlike the note
+/// and confetti windows, this one is rarely opened, so there's no benefit to
+/// building it eagerly at startup).
+fn show_settings_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("settings") {
+        let _ = window.show();
+        let _ = window.set_focus();
+        return;
+    }
+    let result = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
+        .title("Offnote Settings")
+        .inner_size(560.0, 680.0)
+        .min_inner_size(420.0, 480.0)
+        .build();
+    if let Err(e) = result {
+        eprintln!("failed to open settings window: {e}");
+    }
+}
+
 fn toggle_note_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("note") {
         let visible = window.is_visible().unwrap_or(false);
@@ -325,6 +345,80 @@ fn register_toggle_shortcut(app: &AppHandle, shortcut_str: &str) -> Result<Short
 #[tauri::command]
 fn get_config(app: AppHandle) -> Result<AppConfig, String> {
     load_config(&app)
+}
+
+/// Rejects a config the settings window would otherwise happily write to disk
+/// and silently break delivery for - same rules the JS side checks first, kept
+/// here too since the frontend validation is only a UX nicety, not a guarantee.
+fn validate_config(config: &AppConfig) -> Result<(), String> {
+    let mut names = std::collections::HashSet::new();
+    for c in &config.connections {
+        if c.name.trim().is_empty() {
+            return Err("every connection needs a name".to_string());
+        }
+        if !names.insert(c.name.clone()) {
+            return Err(format!("duplicate connection name '{}'", c.name));
+        }
+        match c.kind.as_str() {
+            "markdown" | "obsidian" | "logseq" => {
+                if c.path.as_deref().unwrap_or("").trim().is_empty() {
+                    return Err(format!("connection '{}' needs a path", c.name));
+                }
+            }
+            "affine" => {
+                if c.sidecar_url.as_deref().unwrap_or("").trim().is_empty()
+                    || c.sidecar_token.as_deref().unwrap_or("").trim().is_empty()
+                    || c.sidecar_connector.as_deref().unwrap_or("").trim().is_empty()
+                {
+                    return Err(format!(
+                        "connection '{}' needs sidecar_url, sidecar_token, and sidecar_connector",
+                        c.name
+                    ));
+                }
+            }
+            other => {
+                return Err(format!(
+                    "connection '{}' has unknown type '{}'",
+                    c.name, other
+                ))
+            }
+        }
+    }
+    if config.routing.default.trim().is_empty() {
+        return Err("routing needs a default connection".to_string());
+    }
+    if !names.contains(&config.routing.default) {
+        return Err(format!(
+            "routing.default '{}' does not match any connection name",
+            config.routing.default
+        ));
+    }
+    for name in config.routing.tags.values() {
+        if !names.contains(name) {
+            return Err(format!(
+                "a routing tag points to '{name}' which does not match any connection name"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Overwrites config.yaml with the settings window's edits, then reloads
+/// shortcuts the same way the tray's "Reload Config" does - so the GUI never
+/// needs a separate apply step. Writes via a temp file + rename so a crash or
+/// full disk mid-write can't leave config.yaml half-written.
+#[tauri::command]
+fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
+    validate_config(&config)?;
+    let path = config_path(&app)?;
+    let yaml = serde_yaml::to_string(&config)
+        .map_err(|e| format!("failed to serialize config: {e}"))?;
+    let tmp_path = path.with_extension("yaml.tmp");
+    fs::write(&tmp_path, &yaml)
+        .map_err(|e| format!("failed to write {}: {e}", tmp_path.display()))?;
+    fs::rename(&tmp_path, &path)
+        .map_err(|e| format!("failed to replace {}: {e}", path.display()))?;
+    reload_config(app)
 }
 
 /// Fires the confetti celebration in its own always-on-top overlay window,
@@ -523,6 +617,10 @@ mod tests {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -539,6 +637,7 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             get_config,
+            save_config,
             save_note,
             hide_note_window,
             reload_config,
@@ -552,6 +651,14 @@ pub fn run() {
                 toggle_shortcut: Mutex::new(shortcut),
                 retry_running: AtomicBool::new(false),
             });
+
+            // Re-register for launch-on-login on every startup rather than only
+            // when not yet enabled: the registered command line embeds the exe's
+            // full path, so skipping this once already "enabled" would leave a
+            // stale path behind after a reinstall to a new location or a binary
+            // rename (bit us during the tauri-app.exe -> offnote.exe rename).
+            // enable() is idempotent, so this is a no-op most of the time.
+            let _ = handle.autolaunch().enable();
 
             // Periodic sweep so a note queued while offline (or while a
             // connector is down) still goes out on its own once the network
@@ -592,9 +699,10 @@ pub fn run() {
             };
             confetti_builder.build()?;
 
+            let settings_item = MenuItem::with_id(app, "settings", "Settings...", true, None::<&str>)?;
             let reload_item = MenuItem::with_id(app, "reload", "Reload Config", true, None::<&str>)?;
             let exit_item = MenuItem::with_id(app, "exit", "Exit", true, None::<&str>)?;
-            let tray_menu = Menu::with_items(app, &[&reload_item, &exit_item])?;
+            let tray_menu = Menu::with_items(app, &[&settings_item, &reload_item, &exit_item])?;
 
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
@@ -602,6 +710,7 @@ pub fn run() {
                 .menu(&tray_menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
+                    "settings" => show_settings_window(app),
                     "reload" => {
                         if let Err(e) = reload_config(app.clone()) {
                             eprintln!("reload_config failed: {e}");

@@ -1,0 +1,175 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #1e1e1e;
+  color: #f0f0f0;
+  font-family: -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px;
+  /* Belt-and-suspenders: rows below wrap instead of overflowing, but this
+     guarantees a stray long value (e.g. a pasted sidecar URL) can never push
+     the window itself wider. */
+  overflow-x: hidden;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 16px 20px 24px;
+  min-width: 0;
+}
+
+h1 {
+  font-size: 16px;
+  margin: 0;
+}
+
+h2 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #b0b0b0;
+  margin: 0;
+}
+
+h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #909090;
+  margin: 0;
+}
+
+section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid #333;
+  padding-top: 14px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.field-row label {
+  flex: 0 0 150px;
+  color: #c8c8c8;
+}
+
+input[type="text"],
+input[type="password"],
+select {
+  flex: 1 1 120px;
+  min-width: 0;
+  background: #262626;
+  border: 1px solid #3a3a3a;
+  border-radius: 5px;
+  color: #f0f0f0;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+input:focus,
+select:focus {
+  outline: 1px solid #b39dff;
+}
+
+button {
+  background: #2d2d2d;
+  border: 1px solid #444;
+  border-radius: 5px;
+  color: #f0f0f0;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #383838;
+}
+
+button.primary {
+  background: #6c4fd6;
+  border-color: #6c4fd6;
+  color: #fff;
+  font-weight: 600;
+}
+
+button.primary:hover {
+  background: #7a5ce8;
+}
+
+button.remove-btn {
+  flex: 0 0 auto;
+}
+
+.card {
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #232323;
+}
+
+.card-header {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.card-header input[type="text"] {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.card-header select {
+  flex: 0 0 110px;
+}
+
+.card-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.errors {
+  background: #3a2323;
+  border: 1px solid #6b3a3a;
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: #ffb3b3;
+  font-size: 12px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+#status {
+  font-size: 12px;
+  color: #8a8;
+  min-height: 14px;
+  text-align: right;
+}

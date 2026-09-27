@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Offnote Settings</title>
+    <link rel="stylesheet" href="settings.css" />
+  </head>
+  <body>
+    <div id="app">
+      <h1>Offnote Settings</h1>
+
+      <section>
+        <h2>Shortcuts</h2>
+        <div class="field-row">
+          <label for="toggle-shortcut">Toggle note popup</label>
+          <input type="text" id="toggle-shortcut" placeholder="Alt+Space" />
+        </div>
+        <div class="field-row">
+          <label for="save-shortcut">Save note</label>
+          <input type="text" id="save-shortcut" placeholder="Alt+Enter" />
+        </div>
+      </section>
+
+      <section>
+        <div class="section-header">
+          <h2>Connections</h2>
+          <button type="button" id="add-connection">+ Add connection</button>
+        </div>
+        <div id="connections"></div>
+      </section>
+
+      <section>
+        <h2>Routing</h2>
+        <div class="field-row">
+          <label for="default-connection">Default connection</label>
+          <select id="default-connection"></select>
+        </div>
+        <div class="section-header">
+          <h3>Tag rules</h3>
+          <button type="button" id="add-tag-route">+ Add tag rule</button>
+        </div>
+        <div id="tag-routes"></div>
+      </section>
+
+      <div id="errors" class="errors" hidden></div>
+
+      <div class="actions">
+        <button type="button" id="cancel-btn">Close without saving</button>
+        <button type="button" id="save-btn" class="primary">Save &amp; apply</button>
+      </div>
+      <div id="status"></div>
+    </div>
+    <script type="module" src="settings.js"></script>
+  </body>
+</html>
