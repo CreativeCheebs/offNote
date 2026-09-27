@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Offnote — concept</title>
+<style>
+  :root{
+    --bg:#17140f;
+    --bg-raised:#211c15;
+    --bg-inset:#0f0d09;
+    --ink:#f3ead9;
+    --ink-dim:#b8ab90;
+    --ink-faint:#8a7d64;
+    --accent:#e8a23c;
+    --line:#3a3225;
+    --md:#8fa998;
+    --affine:#5fa8c9;
+    --radius:10px;
+    --serif: Iowan Old Style, Palatino Linotype, Georgia, "Noto Serif", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#f6f1e6; --bg-raised:#ece2cd; --bg-inset:#fbf7ee;
+      --ink:#241f18; --ink-dim:#6b5f4c; --ink-faint:#8c7f66;
+      --accent:#c97a1a; --line:#dccfab;
+      --md:#3f6b52; --affine:#22688c;
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{ margin:0; height:100%; }
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--sans);
+    line-height:1.5;
+  }
+  ::selection{ background:var(--accent); color:var(--bg-inset); }
+
+  .deck{
+    height:100vh; height:100dvh;
+    overflow-y:scroll;
+    scroll-snap-type:y mandatory;
+    scroll-behavior:smooth;
+  }
+  .page{
+    height:100vh; height:100dvh;
+    scroll-snap-align:start; scroll-snap-stop:always;
+    display:flex; flex-direction:column; justify-content:center;
+    padding:5vh 7vw;
+    position:relative;
+    border-bottom:1px solid var(--line);
+  }
+  .inner{ max-width:880px; margin:0 auto; width:100%; }
+
+  .kicker{
+    font-family:var(--mono); font-size:11.5px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-faint); margin:0 0 10px;
+    display:flex; align-items:center; gap:9px;
+  }
+  .kicker.accent{ color:var(--accent); }
+  .kicker.accent::before{
+    content:""; width:6px; height:6px; border-radius:50%; background:var(--accent);
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+
+  h1{
+    font-family:var(--serif); font-weight:500;
+    font-size:clamp(30px,4.6vw,46px); line-height:1.08; letter-spacing:-.01em;
+    margin:0 0 16px; text-wrap:balance;
+  }
+  h1 em{ font-style:italic; color:var(--accent); }
+  h2{
+    font-family:var(--serif); font-weight:500;
+    font-size:clamp(22px,3vw,28px); margin:0 0 12px; text-wrap:balance;
+  }
+  p.lede{ font-size:16px; color:var(--ink-dim); max-width:56ch; margin:0; }
+  p.lede strong{ color:var(--ink); font-weight:600; }
+
+  .p1-grid{ display:grid; grid-template-columns:1.1fr .9fr; gap:40px; align-items:center; }
+  @media (max-width:760px){ .p1-grid{ grid-template-columns:1fr; } .mock-col{ order:-1; } }
+
+  .hotkey-line{
+    margin-top:22px; display:flex; align-items:center; gap:10px;
+    font-family:var(--mono); font-size:13px; color:var(--ink-faint);
+  }
+  kbd{
+    font-family:var(--mono); font-size:12px; background:var(--bg-raised);
+    border:1px solid var(--line); border-bottom-width:2px;
+    border-radius:5px; padding:3px 7px; color:var(--ink);
+  }
+
+  .mock-window{
+    background:#1e1e1e; border-radius:10px; padding:10px;
+    box-shadow:0 20px 60px -20px rgba(0,0,0,.6), 0 0 0 1px var(--line);
+    width:100%; max-width:340px; margin:0 auto;
+  }
+  .mock-titlebar{ display:flex; gap:6px; padding:0 2px 8px; }
+  .mock-titlebar span{ width:9px; height:9px; border-radius:50%; background:#444; }
+  .mock-editor{
+    background:#262626; border:1px solid #3a3a3a; border-radius:6px;
+    padding:10px; min-height:110px;
+    font-family:-apple-system,"Segoe UI",sans-serif; font-size:14px; line-height:1.4;
+    color:#f0f0f0; white-space:pre-wrap;
+  }
+  .mock-editor .tag{ color:#b39dff; font-weight:600; }
+  .mock-editor .caret{
+    display:inline-block; width:2px; height:15px; background:#f0f0f0;
+    vertical-align:text-bottom; animation:blink 1s step-end infinite;
+  }
+  @keyframes blink{ 50%{ opacity:0; } }
+  .mock-status{
+    font-size:10.5px; color:#8a8; text-align:right; margin-top:6px;
+    font-family:-apple-system,"Segoe UI",sans-serif;
+  }
+  .mock-caption{
+    text-align:center; margin-top:10px; font-family:var(--mono); font-size:11px;
+    color:var(--ink-faint);
+  }
+
+  .router-stage{
+    display:grid; grid-template-columns:auto 1fr; gap:36px; align-items:center;
+    margin-top:8px;
+  }
+  @media (max-width:760px){ .router-stage{ grid-template-columns:1fr; } }
+  .router-node{
+    background:var(--bg-raised); border:1px solid color-mix(in srgb, var(--accent) 50%, var(--line));
+    border-radius:12px; padding:22px 26px; text-align:center; min-width:180px;
+  }
+  .router-node .title{ font-weight:600; font-size:16px; color:var(--accent); }
+  .router-node .sub{ font-size:12px; color:var(--ink-faint); margin-top:4px; font-family:var(--mono); }
+
+  .branches{ display:flex; flex-direction:column; gap:16px; }
+  .branch{ display:grid; grid-template-columns:34px 1fr; gap:14px; align-items:center; }
+  .branch svg{ width:34px; height:16px; color:var(--ink-faint); }
+  .branch-card{
+    background:var(--bg-raised); border:1px solid var(--line); border-radius:var(--radius);
+    padding:14px 16px; display:flex; flex-direction:column; gap:5px;
+  }
+  .branch-card .top{ display:flex; align-items:center; gap:10px; }
+  .dot{ width:9px; height:9px; border-radius:50%; flex:none; }
+  .branch-card.md .dot{ background:var(--md); }
+  .branch-card.affine .dot{ background:var(--affine); }
+  .branch-card .name{ font-weight:600; font-size:14.5px; }
+  .branch-card .chip{
+    font-family:var(--mono); font-size:11.5px; padding:2px 8px; border-radius:100px;
+    border:1px solid var(--line); color:var(--ink-dim); margin-left:auto;
+  }
+  .branch-card .note{ font-size:12.5px; color:var(--ink-dim); }
+  .branch-card .note b{ color:var(--ink); font-weight:600; }
+
+  .p3-grid{ display:grid; grid-template-columns:.9fr 1.1fr; gap:44px; align-items:center; }
+  @media (max-width:760px){ .p3-grid{ grid-template-columns:1fr; } }
+  .phone{
+    width:150px; margin:0 auto; aspect-ratio:9/18; background:#0b0b0b; border-radius:22px;
+    border:3px solid #2a2a2a; padding:8px; position:relative;
+  }
+  .phone .notch{ width:40%; height:14px; background:#2a2a2a; border-radius:0 0 10px 10px; margin:0 auto 8px; }
+  .phone .notif{
+    background:#1c1c1c; border:1px solid #333; border-radius:8px; padding:8px 9px;
+    font-size:9px; color:#ddd; font-family:var(--sans);
+  }
+  .phone .notif b{ display:block; font-size:9.5px; color:var(--accent); margin-bottom:2px; }
+  .tagline{
+    font-family:var(--serif); font-style:italic; font-size:clamp(20px,2.6vw,26px);
+    color:var(--ink); margin:18px 0 0; text-wrap:balance;
+  }
+  .closing-note{
+    margin-top:26px; padding-top:18px; border-top:1px dashed var(--line);
+    font-family:var(--mono); font-size:12px; color:var(--ink-faint); line-height:1.6;
+  }
+  .closing-note b{ color:var(--md); font-weight:600; }
+
+  .navdots{
+    position:fixed; right:22px; top:50%; transform:translateY(-50%);
+    display:flex; flex-direction:column; gap:10px; z-index:5;
+  }
+  .navdots a{
+    width:7px; height:7px; border-radius:50%; background:var(--line);
+    border:1px solid var(--ink-faint); display:block; text-indent:-9999px;
+  }
+  .navdots a:hover{ background:var(--accent); border-color:var(--accent); }
+  @media (max-width:600px){ .navdots{ display:none; } }
+  @media (prefers-reduced-motion: reduce){ .deck{ scroll-behavior:auto; } .caret{ animation:none; } }
+</style>
+</head>
+<body>
+
+<nav class="navdots">
+  <a href="#p1">Page 1</a><a href="#p2">Page 2</a><a href="#p3">Page 3</a>
+</nav>
+
+<div class="deck">
+
+  <section class="page" id="p1">
+    <div class="inner p1-grid">
+      <div>
+        <p class="kicker accent">offnote — the concept</p>
+        <h1>Capture it fast.<br>Let it <em>go</em>.</h1>
+        <p class="lede">
+          A global hotkey pops open a blank line. Type, hit <strong>Alt+Enter</strong>,
+          it's gone — filed by whatever <strong>#tag</strong> you put in the text.
+        </p>
+        <div class="hotkey-line"><kbd>Alt</kbd>+<kbd>Enter</kbd> to save · <kbd>Esc</kbd> to dismiss</div>
+      </div>
+      <div class="mock-col">
+        <div class="mock-window">
+          <div class="mock-titlebar"><span></span><span></span><span></span></div>
+          <div class="mock-editor">Pick up the dry cleaning <span class="tag">#errand</span><span class="caret"></span></div>
+          <div class="mock-status">saved ✓</div>
+        </div>
+        <p class="mock-caption">the actual capture window — src/index.html</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="page" id="p2">
+    <div class="inner">
+      <p class="kicker">where a tag sends it</p>
+      <h2>One router, one note, out to wherever it's tagged for.</h2>
+      <div class="router-stage">
+        <div class="router-node">
+          <div class="title">Router</div>
+          <div class="sub">matches #tag → destination</div>
+        </div>
+        <div class="branches">
+          <div class="branch">
+            <svg viewBox="0 0 34 16"><path d="M0 8H30M23 1l7 7-7 7" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
+            <div class="branch-card md">
+              <div class="top"><span class="dot"></span><span class="name">Markdown file</span><span class="chip">#work</span></div>
+              <div class="note">Plain files — also readable straight in <b>Obsidian</b> and <b>Logseq</b>.</div>
+            </div>
+          </div>
+          <div class="branch">
+            <svg viewBox="0 0 34 16"><path d="M0 8H30M23 1l7 7-7 7" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
+            <div class="branch-card affine">
+              <div class="top"><span class="dot"></span><span class="name">AFFiNE workspace</span><span class="chip">no tag</span></div>
+              <div class="note">Your default, for whatever doesn't need sorting.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="page" id="p3">
+    <div class="inner p3-grid">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="notif"><b>Offnote</b>tap to jot something down</div>
+      </div>
+      <div>
+        <p class="kicker">same tags, from the lockscreen</p>
+        <h2>Android carries the same config, no unlock required to see it.</h2>
+        <p class="lede">A notification puts capture one tap away from the lockscreen — dismiss it like any other, it's not stuck there.</p>
+        <p class="tagline">Whichever app is fastest to open, wins.</p>
+        <div class="closing-note">
+          this covers the concept end to end · tag syntax, the AFFiNE sidecar, and a <b>WinForms</b> client are in progress — details live in the full docs, not this page
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
