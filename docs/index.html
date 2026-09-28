@@ -156,11 +156,11 @@
     border:3px solid #2a2a2a; padding:8px; position:relative;
   }
   .phone .notch{ width:40%; height:14px; background:#2a2a2a; border-radius:0 0 10px 10px; margin:0 auto 8px; }
-  .phone .notif{
-    background:#1c1c1c; border:1px solid #333; border-radius:8px; padding:8px 9px;
-    font-size:9px; color:#ddd; font-family:var(--sans);
+  .phone .phone-placeholder{
+    height:calc(100% - 22px); border:1px dashed #3a3a3a; border-radius:8px;
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    font-size:9.5px; color:#6b6b6b; font-family:var(--mono); padding:10px;
   }
-  .phone .notif b{ display:block; font-size:9.5px; color:var(--accent); margin-bottom:2px; }
   .tagline{
     font-family:var(--serif); font-style:italic; font-size:clamp(20px,2.6vw,26px);
     color:var(--ink); margin:18px 0 0; text-wrap:balance;
@@ -187,7 +187,7 @@
 <body>
 
 <nav class="navdots">
-  <a href="#p1">Page 1</a><a href="#p2">Page 2</a><a href="#p3">Page 3</a>
+  <a href="#p1">Page 1</a><a href="#p2">Page 2</a><a href="#p3">Page 3</a><a href="#p4">Page 4</a>
 </nav>
 
 <div class="deck">
@@ -199,7 +199,9 @@
         <h1>Capture it fast.<br>Let it <em>go</em>.</h1>
         <p class="lede">
           A global hotkey pops open a blank line. Type, hit <strong>Alt+Enter</strong>,
-          it's gone — filed by whatever <strong>#tag</strong> you put in the text.
+          it's gone — filed by whatever <strong>#tag</strong> you put in the text,
+          straight into the notes app you already use. Not a new place to keep
+          things — just the fastest way in.
         </p>
         <div class="hotkey-line"><kbd>Alt</kbd>+<kbd>Enter</kbd> to save · <kbd>Esc</kbd> to dismiss</div>
       </div>
@@ -247,16 +249,30 @@
     <div class="inner p3-grid">
       <div class="phone">
         <div class="notch"></div>
-        <div class="notif"><b>Offnote</b>tap to jot something down</div>
+        <div class="phone-placeholder">screenshot coming soon</div>
       </div>
       <div>
-        <p class="kicker">same tags, from the lockscreen</p>
-        <h2>Android carries the same config, no unlock required to see it.</h2>
-        <p class="lede">A notification puts capture one tap away from the lockscreen — dismiss it like any other, it's not stuck there.</p>
-        <p class="tagline">Whichever app is fastest to open, wins.</p>
-        <div class="closing-note">
-          this covers the concept end to end · tag syntax, the AFFiNE sidecar, and a <b>WinForms</b> client are in progress — details live in the full docs, not this page
-        </div>
+        <p class="kicker">on android, for now</p>
+        <h2>A minimal app: open it, write, save.</h2>
+        <p class="lede">No lockscreen capture yet — that's a harder permission to get right on Android than it sounds. For now it's exactly what it sounds like: open the app, jot the note, it's saved and routed like everywhere else.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="page" id="p4">
+    <div class="inner">
+      <p class="kicker">why this exists, not another one</p>
+      <h2>Keep, Notes, OneNote — good apps. Never <em style="color:var(--accent); font-style:italic;">on</em> when you need them.</h2>
+      <p class="lede">
+        None of them open with a global hotkey, and on Windows especially, none
+        are truly on-demand — you still have to go find them first. For an ADHD
+        brain that's the whole failure mode: leaving the screen you're on to go
+        note something down.
+      </p>
+      <div class="closing-note">
+        built after years of trying to make this click, by someone who has it —
+        connectors target <b>open-source</b> note apps first, fewer surfaces to
+        break · Android and Windows ship today, iOS and macOS are next
       </div>
     </div>
   </section>
