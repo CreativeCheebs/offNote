@@ -347,41 +347,50 @@ fn get_config(app: AppHandle) -> Result<AppConfig, String> {
     load_config(&app)
 }
 
+/// Field-level checks for a single connection, shared by `validate_config`
+/// (every connection, before a save) and `test_connection` (one connection, on
+/// demand from its card's Test button - so Test always validates first rather
+/// than attempting delivery with an obviously-incomplete connection).
+fn validate_connection(c: &Connection) -> Result<(), String> {
+    if c.name.trim().is_empty() {
+        return Err("every connection needs a name".to_string());
+    }
+    match c.kind.as_str() {
+        "markdown" | "obsidian" | "logseq" => {
+            if c.path.as_deref().unwrap_or("").trim().is_empty() {
+                return Err(format!("connection '{}' needs a path", c.name));
+            }
+        }
+        "affine" => {
+            if c.sidecar_url.as_deref().unwrap_or("").trim().is_empty()
+                || c.sidecar_token.as_deref().unwrap_or("").trim().is_empty()
+                || c.sidecar_connector.as_deref().unwrap_or("").trim().is_empty()
+            {
+                return Err(format!(
+                    "connection '{}' needs sidecar_url, sidecar_token, and sidecar_connector",
+                    c.name
+                ));
+            }
+        }
+        other => {
+            return Err(format!(
+                "connection '{}' has unknown type '{}'",
+                c.name, other
+            ))
+        }
+    }
+    Ok(())
+}
+
 /// Rejects a config the settings window would otherwise happily write to disk
 /// and silently break delivery for - same rules the JS side checks first, kept
 /// here too since the frontend validation is only a UX nicety, not a guarantee.
 fn validate_config(config: &AppConfig) -> Result<(), String> {
     let mut names = std::collections::HashSet::new();
     for c in &config.connections {
-        if c.name.trim().is_empty() {
-            return Err("every connection needs a name".to_string());
-        }
+        validate_connection(c)?;
         if !names.insert(c.name.clone()) {
             return Err(format!("duplicate connection name '{}'", c.name));
-        }
-        match c.kind.as_str() {
-            "markdown" | "obsidian" | "logseq" => {
-                if c.path.as_deref().unwrap_or("").trim().is_empty() {
-                    return Err(format!("connection '{}' needs a path", c.name));
-                }
-            }
-            "affine" => {
-                if c.sidecar_url.as_deref().unwrap_or("").trim().is_empty()
-                    || c.sidecar_token.as_deref().unwrap_or("").trim().is_empty()
-                    || c.sidecar_connector.as_deref().unwrap_or("").trim().is_empty()
-                {
-                    return Err(format!(
-                        "connection '{}' needs sidecar_url, sidecar_token, and sidecar_connector",
-                        c.name
-                    ));
-                }
-            }
-            other => {
-                return Err(format!(
-                    "connection '{}' has unknown type '{}'",
-                    c.name, other
-                ))
-            }
         }
     }
     if config.routing.default.trim().is_empty() {
@@ -419,6 +428,17 @@ fn save_config(app: AppHandle, config: AppConfig) -> Result<(), String> {
     fs::rename(&tmp_path, &path)
         .map_err(|e| format!("failed to replace {}: {e}", path.display()))?;
     reload_config(app)
+}
+
+/// Delivers a one-off test note to a single connection straight from its
+/// settings card, without needing to Save first or touch the durable queue -
+/// this is purely a "does this connection actually work" check, so a failure
+/// here shouldn't leave anything behind for the retry worker to keep re-trying.
+#[tauri::command]
+fn test_connection(app: AppHandle, connection: Connection) -> Result<(), String> {
+    validate_connection(&connection)?;
+    let text = format!("current time testing - {}", Utc::now().to_rfc3339());
+    write_to_connection(&app, &connection, &text)
 }
 
 /// Fires the confetti celebration in its own always-on-top overlay window,
@@ -576,6 +596,54 @@ mod tests {
         }
     }
 
+    fn conn(name: &str, kind: &str) -> Connection {
+        Connection {
+            name: name.into(),
+            kind: kind.into(),
+            path: None,
+            sidecar_url: None,
+            sidecar_token: None,
+            sidecar_connector: None,
+        }
+    }
+
+    #[test]
+    fn validate_connection_rejects_empty_name() {
+        let c = conn("", "markdown");
+        assert!(validate_connection(&c).is_err());
+    }
+
+    #[test]
+    fn validate_connection_requires_path_for_file_kinds() {
+        for kind in ["markdown", "obsidian", "logseq"] {
+            let c = conn("x", kind);
+            assert!(validate_connection(&c).is_err(), "{kind} without a path should fail");
+
+            let mut with_path = conn("x", kind);
+            with_path.path = Some("notes".into());
+            assert!(validate_connection(&with_path).is_ok(), "{kind} with a path should pass");
+        }
+    }
+
+    #[test]
+    fn validate_connection_requires_all_sidecar_fields_for_affine() {
+        let mut c = conn("cloud", "affine");
+        assert!(validate_connection(&c).is_err());
+
+        c.sidecar_url = Some("http://host:8787".into());
+        c.sidecar_token = Some("tok".into());
+        assert!(validate_connection(&c).is_err(), "missing connector name should still fail");
+
+        c.sidecar_connector = Some("cloud".into());
+        assert!(validate_connection(&c).is_ok());
+    }
+
+    #[test]
+    fn validate_connection_rejects_unknown_type() {
+        let c = conn("x", "dropbox");
+        assert!(validate_connection(&c).is_err());
+    }
+
     #[test]
     fn tags_require_no_space_after_hash() {
         assert_eq!(extract_tags("#work note"), vec!["work"]);
@@ -638,6 +706,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_config,
             save_config,
+            test_connection,
             save_note,
             hide_note_window,
             reload_config,

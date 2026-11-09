@@ -15,3 +15,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Offnote"
 include(":app")
+include(":shared-ui")
+include(":desktopApp")

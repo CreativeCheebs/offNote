@@ -117,8 +117,13 @@ button.primary:hover {
   background: #7a5ce8;
 }
 
-button.remove-btn {
+button.remove-btn,
+button.test-btn {
   flex: 0 0 auto;
+}
+
+input.invalid {
+  border-color: #a55050;
 }
 
 .card {
@@ -150,6 +155,22 @@ button.remove-btn {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.card-footer {
+  min-height: 14px;
+}
+
+.card-message {
+  font-size: 11px;
+}
+
+.card-message.error {
+  color: #ffb3b3;
+}
+
+.card-message.success {
+  color: #8fd18f;
 }
 
 .errors {

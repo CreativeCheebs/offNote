@@ -49,6 +49,64 @@ function fieldPlaceholder(type, field) {
   return "";
 }
 
+// Builds the exact shape the Rust `AppConfig`/`Connection` structs expect (see
+// src-tauri/src/lib.rs), matching the same field names as config.yaml. Shared
+// by the full-config Save payload and the per-card Test button.
+function connectionPayload(c) {
+  const base = { name: c.name.trim(), type: c.type };
+  if (c.type === "affine") {
+    base.sidecar_url = c.sidecarUrl.trim() || null;
+    base.sidecar_token = c.sidecarToken.trim() || null;
+    base.sidecar_connector = c.sidecarConnector.trim() || null;
+  } else {
+    base.path = c.path.trim() || null;
+  }
+  return base;
+}
+
+// Mirrors `validate_connection` in the Rust backend so the settings window
+// shows the same complaint before a save or a test round-trips there. Applied
+// live (on every keystroke) as well as before Save/Test, per "check and
+// validate the fields if there's any issue" - errors show inline on the card
+// itself, not just in a summary at save time.
+function connectionErrors(c) {
+  if (!c.name) return ["needs a name"];
+  if (c.type === "affine") {
+    if (!c.sidecar_url || !c.sidecar_token || !c.sidecar_connector) {
+      return ["needs sidecar URL, token, and connector name"];
+    }
+  } else if (!c.path) {
+    return ["needs a folder path"];
+  }
+  return [];
+}
+
+async function testConnection(conn, messageEl, btn) {
+  const payload = connectionPayload(conn);
+  const errors = connectionErrors(payload);
+  if (errors.length) {
+    messageEl.textContent = `Can't test - ${errors.join(", ")}.`;
+    messageEl.classList.add("error");
+    messageEl.classList.remove("success");
+    return;
+  }
+  btn.disabled = true;
+  messageEl.textContent = "Testing...";
+  messageEl.classList.remove("error", "success");
+  try {
+    await invoke("test_connection", { connection: payload });
+    messageEl.textContent = 'Sent "current time testing" - check the destination.';
+    messageEl.classList.add("success");
+    messageEl.classList.remove("error");
+  } catch (err) {
+    messageEl.textContent = typeof err === "string" ? err : "Test failed";
+    messageEl.classList.add("error");
+    messageEl.classList.remove("success");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function renderConnections() {
   connectionsEl.innerHTML = "";
   for (const conn of connections) {
@@ -62,10 +120,6 @@ function renderConnections() {
     nameInput.type = "text";
     nameInput.placeholder = "connection name";
     nameInput.value = conn.name;
-    nameInput.addEventListener("input", () => {
-      conn.name = nameInput.value;
-      renderRoutingOptions();
-    });
 
     const typeSelect = document.createElement("select");
     for (const t of CONNECTION_TYPES) {
@@ -75,26 +129,23 @@ function renderConnections() {
       if (t === conn.type) opt.selected = true;
       typeSelect.appendChild(opt);
     }
-    typeSelect.addEventListener("change", () => {
-      conn.type = typeSelect.value;
-      renderConnections();
-    });
+
+    const testBtn = document.createElement("button");
+    testBtn.type = "button";
+    testBtn.textContent = "Test";
+    testBtn.className = "test-btn";
 
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
     removeBtn.textContent = "Remove";
     removeBtn.className = "remove-btn";
-    removeBtn.addEventListener("click", () => {
-      connections = connections.filter((c) => c.id !== conn.id);
-      renderConnections();
-      renderRoutingOptions();
-    });
 
-    header.append(nameInput, typeSelect, removeBtn);
+    header.append(nameInput, typeSelect, testBtn, removeBtn);
     card.appendChild(header);
 
     const fieldsWrap = document.createElement("div");
     fieldsWrap.className = "card-fields";
+    const fieldInputs = {};
     for (const field of fieldsForType(conn.type)) {
       const row = document.createElement("div");
       row.className = "field-row";
@@ -104,13 +155,61 @@ function renderConnections() {
       input.type = field === "sidecarToken" ? "password" : "text";
       input.value = conn[field] || "";
       input.placeholder = fieldPlaceholder(conn.type, field);
-      input.addEventListener("input", () => {
-        conn[field] = input.value;
-      });
+      fieldInputs[field] = input;
       row.append(label, input);
       fieldsWrap.appendChild(row);
     }
     card.appendChild(fieldsWrap);
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    const messageEl = document.createElement("span");
+    messageEl.className = "card-message";
+    footer.appendChild(messageEl);
+    card.appendChild(footer);
+
+    // Live validation: recomputed on every keystroke in this card, so a
+    // problem shows up immediately rather than only when Save/Test is clicked.
+    function refreshValidity() {
+      const errors = connectionErrors(connectionPayload(conn));
+      messageEl.classList.remove("success");
+      if (errors.length) {
+        messageEl.textContent = `This connection ${errors.join(", ")}.`;
+        messageEl.classList.add("error");
+      } else {
+        messageEl.textContent = "";
+        messageEl.classList.remove("error");
+      }
+      nameInput.classList.toggle("invalid", !conn.name.trim());
+      for (const [field, input] of Object.entries(fieldInputs)) {
+        input.classList.toggle("invalid", !conn[field] || !conn[field].trim());
+      }
+    }
+
+    nameInput.addEventListener("input", () => {
+      conn.name = nameInput.value;
+      renderRoutingOptions();
+      refreshValidity();
+    });
+    typeSelect.addEventListener("change", () => {
+      conn.type = typeSelect.value;
+      renderConnections();
+      renderRoutingOptions();
+    });
+    for (const [field, input] of Object.entries(fieldInputs)) {
+      input.addEventListener("input", () => {
+        conn[field] = input.value;
+        refreshValidity();
+      });
+    }
+    removeBtn.addEventListener("click", () => {
+      connections = connections.filter((c) => c.id !== conn.id);
+      renderConnections();
+      renderRoutingOptions();
+    });
+    testBtn.addEventListener("click", () => testConnection(conn, messageEl, testBtn));
+
+    refreshValidity();
     connectionsEl.appendChild(card);
   }
 }
@@ -187,20 +286,7 @@ function addTagRoute() {
   renderTagRoutes();
 }
 
-// Builds the exact shape the Rust `AppConfig` struct expects (see
-// src-tauri/src/lib.rs), matching the same field names as config.yaml.
 function toConfigPayload() {
-  const conns = connections.map((c) => {
-    const base = { name: c.name.trim(), type: c.type };
-    if (c.type === "affine") {
-      base.sidecar_url = c.sidecarUrl.trim() || null;
-      base.sidecar_token = c.sidecarToken.trim() || null;
-      base.sidecar_connector = c.sidecarConnector.trim() || null;
-    } else {
-      base.path = c.path.trim() || null;
-    }
-    return base;
-  });
   const tags = {};
   for (const r of tagRoutes) {
     const tag = r.tag.trim();
@@ -211,7 +297,7 @@ function toConfigPayload() {
       toggle_note: toggleShortcutEl.value.trim(),
       save_note: saveShortcutEl.value.trim(),
     },
-    connections: conns,
+    connections: connections.map(connectionPayload),
     routing: { tags, default: defaultConnectionEl.value },
   };
 }
@@ -239,14 +325,15 @@ function fromConfig(config) {
   renderTagRoutes();
 }
 
-// Mirrors the checks in the Rust `validate_config` so the user sees the same
-// errors here, before a save attempt round-trips to the backend.
+// Aggregate, cross-cutting checks (duplicates, routing) on top of the
+// per-connection checks in `connectionErrors`.
 function validate(payload) {
   const errors = [];
   const seen = new Set();
   for (const c of payload.connections) {
-    if (!c.name) {
-      errors.push("Every connection needs a name.");
+    const cErrors = connectionErrors(c);
+    if (cErrors.length) {
+      errors.push(`Connection "${c.name || "(unnamed)"}" ${cErrors.join(", ")}.`);
       continue;
     }
     if (seen.has(c.name)) {
@@ -254,13 +341,6 @@ function validate(payload) {
       continue;
     }
     seen.add(c.name);
-    if (c.type === "affine") {
-      if (!c.sidecar_url || !c.sidecar_token || !c.sidecar_connector) {
-        errors.push(`Connection "${c.name}" needs sidecar URL, token, and connector name.`);
-      }
-    } else if (!c.path) {
-      errors.push(`Connection "${c.name}" needs a folder path.`);
-    }
   }
   if (!payload.routing.default) errors.push("Pick a default connection.");
   else if (!seen.has(payload.routing.default)) errors.push('"Default connection" doesn\'t match any connection above.');

@@ -1,13 +1,8 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Offnote" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
-
-    <!-- Transparent full-screen theme for the lockscreen capture popup, similar in
-         spirit to the desktop apps' borderless always-on-top note window. -->
-    <style name="Theme.Offnote.Capture" parent="Theme.MaterialComponents.DayNight.Dialog">
-        <item name="android:windowIsFloating">false</item>
+    <style name="Theme.Offnote" parent="android:style/Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Offnote.Capture" parent="Theme.Offnote">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowNoTitle">true</item>
-        <item name="android:backgroundDimEnabled">true</item>
     </style>
 </resources>
