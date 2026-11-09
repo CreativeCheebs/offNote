@@ -1,5 +1,8 @@
 # Offnote
 
+Desktop framework memory measurements are recorded in
+[`docs/desktop-memory-comparison.md`](docs/desktop-memory-comparison.md).
+
 A quick-capture note app for jotting things down with as little friction as
 possible - a global hotkey popup on desktop, a lockscreen notification on
 Android - with a small save-celebration animation as positive reinforcement
@@ -14,7 +17,12 @@ component for AFFiNE:
 |---|---|
 | `src/` + `src-tauri/` | Desktop app (Windows/Linux/macOS via Tauri) |
 | `winforms-quicknote/` | Windows-only alternative desktop app (WinForms/.NET) |
+| `android-offnote/desktopApp/` | Compose Multiplatform desktop app using the shared Material 3 UI |
+| `avalonia-offnote/` | .NET 10 Avalonia desktop prototype sharing the existing C# note logic |
+| `gtk-offnote/` | Windows GTK 3 capture and memory prototype |
+| `qt-offnote/` | Windows Qt 6 Widgets desktop client (the chosen direction): tray, hotkey, routing, delivery, Settings window |
 | `android-offnote/` | Android app (Kotlin) |
+| `android-offnote/shared-ui/` | Shared Compose Multiplatform Material 3 screens for Android and a future JVM desktop host |
 | `connectors/affine-sidecar/` | Small server-side HTTP service that talks to AFFiNE |
 | `connectors/setup/` | Interactive CLI to help build a desktop `config.yaml` |
 
@@ -76,6 +84,54 @@ dotnet run
 
 Shares the same `%APPDATA%\QuickNote\config.yaml` and note database as the
 Tauri app - handy if you want to compare the two or prefer WinForms' native feel.
+The root `launch.bat` and `Offnote.lnk` launch this lighter WinForms app.
+
+### 2c. Desktop app (Compose Multiplatform)
+
+From `android-offnote/`, with a JDK 17 and Gradle dependencies available:
+
+```bash
+./gradlew :desktopApp:run
+```
+
+On Windows, you can also double-click `launch-compose.bat` at the repository
+root. Keep its console open while the app runs.
+
+The Compose desktop app opens from its tray icon or the configured global hotkey
+(`Alt+Space` in the template). It reads and writes the existing
+`%APPDATA%\QuickNote\config.yaml` and `quicknote.db`; existing Tauri and
+WinForms notes remain visible in its outbox. It writes locally before delivery,
+retries pending notes in the background, and supports markdown, Obsidian,
+Logseq, and AFFiNE sidecar destinations. Keep only one desktop client handling
+delivery at a time to avoid two processes attempting the same pending note.
+
+The Compose desktop host currently lacks the older desktop clients' login
+autostart and save celebration. Its shortcut parser currently recognizes Space,
+Enter, and N; other configured keys require adding a key mapping.
+
+### 2d. Desktop app (Avalonia prototype)
+
+The Avalonia capture window reuses WinForms' configuration, routing, connector,
+and SQLite code. Build it with the repository-local .NET 8 SDK:
+
+```powershell
+.\.dotnet10\dotnet.exe build .\avalonia-offnote\Offnote.Avalonia.csproj -c Release
+.\launch-avalonia.bat
+```
+
+This is currently a capture prototype without a tray icon, global hotkey, or
+background retry loop. `launch.bat` still opens WinForms until those behaviors
+are ported. See `avalonia-offnote/README.md` for its scope.
+
+### 2e. Desktop app (Qt, the chosen direction)
+
+Install MSYS2's `mingw-w64-x86_64-qt6-base` and `mingw-w64-x86_64-yaml-cpp`
+packages, then double-click `launch-qt.bat` at the repository root (it builds
+first). It reads and writes the same `%APPDATA%\QuickNote\config.yaml` and
+`quicknote.db` as the other desktop clients, routes by `#tag`, delivers to
+markdown, Obsidian, Logseq and the AFFiNE sidecar with background retry, and has
+a Settings window and Outbox view in its tray menu. See `qt-offnote/README.md`.
+Run only one desktop client at a time.
 
 ### 3. Android app
 
@@ -85,6 +141,10 @@ Requires the Android SDK. From `android-offnote/`:
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
+
+The Android capture, quick capture, settings, and outbox screens use shared
+Compose Material 3 UI. Its Room outbox, WorkManager delivery, encrypted config,
+and notification entry points remain Android-specific.
 
 Open the app once to grant the notification permission, then go to
 **Settings** and paste in your connections/routing config (YAML, same shape

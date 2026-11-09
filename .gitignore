@@ -8,6 +8,13 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.dotnet8/
+.dotnet10/
+.tools/
+avalonia-offnote/bin/
+avalonia-offnote/obj/
+gtk-offnote/*.exe
+qt-offnote/build/
 dist
 dist-ssr
 *.local
@@ -30,3 +37,7 @@ android-offnote/app/src/debug/res/xml/network_security_config.xml
 *.njsproj
 *.sln
 *.sw?
+
+winui-offnote/bin/
+winui-offnote/obj/
+.claude/settings.local.json

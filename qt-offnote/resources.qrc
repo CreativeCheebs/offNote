@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="app.png">../src-tauri/icons/32x32.png</file>
+    </qresource>
+</RCC>
