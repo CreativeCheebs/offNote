@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Offnote.Avalonia</AssemblyName>
+    <!-- Memory: workstation non-concurrent GC (no background GC thread/heaps), quick JIT,
+         no ICU. -->
+    <ServerGarbageCollector>false</ServerGarbageCollector>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>false</TieredPGO>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.5" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="YamlDotNet" Version="18.1.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\winforms-quicknote\AppConfig.cs" Link="Core\AppConfig.cs" />
+    <Compile Include="..\winforms-quicknote\AppPaths.cs" Link="Core\AppPaths.cs" />
+    <Compile Include="..\winforms-quicknote\NoteStore.cs" Link="Core\NoteStore.cs" />
+    <Compile Include="..\winforms-quicknote\NoteRouter.cs" Link="Core\NoteRouter.cs" />
+    <Content Include="..\winforms-quicknote\app.ico" Link="app.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\winforms-quicknote\config.yaml" Link="config.yaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

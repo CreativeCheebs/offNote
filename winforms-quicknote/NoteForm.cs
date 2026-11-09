@@ -3,17 +3,17 @@ namespace QuickNote;
 public sealed class NoteForm : Form
 {
     private const int HotkeyId = 1;
-    private const int CardPadding = 18;
-    private const int FooterHeight = 34;
+    private const int CardPadding = 22;
+    private const int FooterHeight = 44;
 
-    private static readonly Color BackgroundColor = Color.FromArgb(24, 24, 32);
-    private static readonly Color BorderColor = Color.FromArgb(58, 58, 74);
-    private static readonly Color AccentColor = Color.FromArgb(124, 108, 246);
-    private static readonly Color AccentHoverColor = Color.FromArgb(144, 130, 250);
-    private static readonly Color TagColor = Color.FromArgb(179, 157, 255);
-    private static readonly Color TextBoxBackColor = Color.FromArgb(32, 32, 42);
-    private static readonly Color TextColor = Color.FromArgb(236, 236, 242);
-    private static readonly Color HintColor = Color.FromArgb(188, 188, 202);
+    private static readonly Color BackgroundColor = Color.FromArgb(25, 22, 34);
+    private static readonly Color BorderColor = Color.FromArgb(72, 64, 85);
+    private static readonly Color AccentColor = Color.FromArgb(209, 186, 255);
+    private static readonly Color AccentHoverColor = Color.FromArgb(226, 207, 255);
+    private static readonly Color TagColor = Color.FromArgb(178, 224, 204);
+    private static readonly Color TextBoxBackColor = Color.FromArgb(39, 35, 49);
+    private static readonly Color TextColor = Color.FromArgb(248, 244, 250);
+    private static readonly Color HintColor = Color.FromArgb(169, 161, 180);
     private static readonly Color StatusOkColor = Color.FromArgb(140, 230, 170);
     private static readonly Color StatusDiscardColor = Color.FromArgb(240, 190, 120);
     private static readonly Color CelebrateGreen = Color.FromArgb(90, 224, 138);
@@ -40,7 +40,7 @@ public sealed class NoteForm : Form
     private readonly RichTextBox _textBox = new();
     private bool _highlighting;
     private readonly Label _hintLabel = new();
-    private readonly Button _saveButton = new();
+    private readonly RoundedActionButton _saveButton = new();
     private readonly SparkleOverlay _sparkleOverlay = new();
     private readonly NotifyIcon _trayIcon = new();
     private readonly System.Windows.Forms.Timer _closeTimer = new() { Interval = DiscardCloseDelayMs };
@@ -50,7 +50,7 @@ public sealed class NoteForm : Form
     private Color _cardGlowColor;
     private float _celebrateElapsed;
 
-    private const string HintText = "Ctrl/Alt+Enter to save · Esc keeps a #discarded draft";
+    private const string HintText = "Alt / Ctrl + Enter to save   |   Esc to discard";
 
     private sealed class Particle
     {
@@ -79,11 +79,14 @@ public sealed class NoteForm : Form
 
         SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw, true);
 
+        AutoScaleDimensions = new SizeF(96f, 96f);
+        AutoScaleMode = AutoScaleMode.Dpi;
         FormBorderStyle = FormBorderStyle.None;
+        Text = "Offnote";
         StartPosition = FormStartPosition.CenterScreen;
         ShowInTaskbar = false;
         TopMost = true;
-        Size = new Size(480, 260);
+        Size = new Size(540, 330);
         BackColor = BackgroundColor;
         Padding = new Padding(1);
         _cardGlowColor = BorderColor;
@@ -106,73 +109,116 @@ public sealed class NoteForm : Form
         var content = new Panel { Dock = DockStyle.Fill, Padding = new Padding(CardPadding), BackColor = BackgroundColor };
         Controls.Add(content);
 
-        // Rows: textarea (fills remaining space) / spacer (equal to the card padding,
-        // so the gap above the footer matches the gap on every other side) / footer.
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
+            Margin = Padding.Empty,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             BackColor = BackgroundColor,
         };
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, CardPadding));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 14));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, FooterHeight));
         content.Controls.Add(layout);
 
+        // Fixed-pixel label positions clipped the title once fonts scaled with DPI, so the
+        // header is a table: badge | title + subtitle (auto height) | close.
+        var header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 3, RowCount = 1, BackColor = BackgroundColor,
+            Margin = new Padding(0, 0, 0, 14), Padding = Padding.Empty,
+        };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        header.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.Controls.Add(header, 0, 0);
+        header.Controls.Add(new Label
+        {
+            Text = "O", Width = 34, Height = 34, Margin = new Padding(0, 0, 13, 0),
+            Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleCenter,
+            BackColor = AccentColor, ForeColor = BackgroundColor,
+            Font = new Font("Segoe UI Semibold", 13f),
+            AccessibleName = "Offnote",
+        }, 0, 0);
+        var titles = new TableLayoutPanel
+        {
+            AutoSize = true, ColumnCount = 1, RowCount = 2, Anchor = AnchorStyles.Left,
+            BackColor = BackgroundColor, Margin = Padding.Empty,
+        };
+        titles.Controls.Add(new Label
+        {
+            Text = "Offnote", AutoSize = true, Margin = Padding.Empty,
+            ForeColor = TextColor, Font = new Font("Segoe UI Semibold", 15f),
+        }, 0, 0);
+        titles.Controls.Add(new Label
+        {
+            Text = "CAPTURE A THOUGHT", AutoSize = true, Margin = Padding.Empty,
+            ForeColor = HintColor, Font = new Font("Segoe UI Semibold", 8f),
+        }, 0, 1);
+        header.Controls.Add(titles, 1, 0);
+        var close = new Label
+        {
+            Text = "×", AutoSize = false, Width = 32, Height = 32,
+            Anchor = AnchorStyles.Right | AnchorStyles.Top, Margin = new Padding(0, 4, 0, 0),
+            ForeColor = HintColor, TextAlign = ContentAlignment.MiddleCenter,
+            Font = new Font("Segoe UI", 18f), Cursor = Cursors.Hand,
+            AccessibleName = "Close", AccessibleRole = AccessibleRole.PushButton,
+        };
+        close.Click += (_, _) => HideNote();
+        close.MouseEnter += (_, _) => close.ForeColor = TextColor;
+        close.MouseLeave += (_, _) => close.ForeColor = HintColor;
+        header.Controls.Add(close, 2, 0);
+
         _textBoxBorder.Dock = DockStyle.Fill;
+        _textBoxBorder.Margin = Padding.Empty;
         _textBoxBorder.BackColor = BorderColor;
         _textBoxBorder.Padding = new Padding(1);
-        layout.Controls.Add(_textBoxBorder, 0, 0);
+        layout.Controls.Add(_textBoxBorder, 0, 1);
 
-        // WinForms' native TextBox ignores Control.Padding entirely (it's a plain Win32
-        // Edit control under the hood), so text/caret render flush against its edge. An
-        // inner panel with real padding is the standard way to get visual breathing room.
-        var textBoxInset = new Panel { Dock = DockStyle.Fill, BackColor = TextBoxBackColor, Padding = new Padding(10, 8, 10, 8) };
+        var textBoxInset = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = TextBoxBackColor,
+            Padding = new Padding(15, 12, 15, 12),
+        };
         _textBoxBorder.Controls.Add(textBoxInset);
-
-        // RichTextBox (not TextBox) so #tags can be colored inline as you type.
         _textBox.Multiline = true;
         _textBox.Dock = DockStyle.Fill;
         _textBox.BorderStyle = BorderStyle.None;
         _textBox.BackColor = TextBoxBackColor;
         _textBox.ForeColor = TextColor;
-        _textBox.Font = new Font("Segoe UI", 11f);
+        _textBox.Font = new Font("Segoe UI", 11.5f);
         _textBox.AcceptsTab = true;
+        _textBox.AccessibleName = "Quick note";
         _textBox.KeyDown += TextBox_KeyDown;
         _textBox.TextChanged += (_, _) => HighlightTags();
         _textBox.Enter += (_, _) => _textBoxBorder.BackColor = AccentColor;
         _textBox.Leave += (_, _) => _textBoxBorder.BackColor = BorderColor;
         textBoxInset.Controls.Add(_textBox);
 
-        var bottomBar = new Panel { Dock = DockStyle.Fill, BackColor = BackgroundColor };
-        layout.Controls.Add(bottomBar, 0, 2);
-
-        _saveButton.Text = "Save";
+        var bottomBar = new Panel { Dock = DockStyle.Fill, BackColor = BackgroundColor, Margin = Padding.Empty };
+        layout.Controls.Add(bottomBar, 0, 3);
+        _saveButton.Text = "Save note";
         _saveButton.Dock = DockStyle.Right;
-        _saveButton.Width = 92;
-        _saveButton.FlatStyle = FlatStyle.Flat;
-        _saveButton.FlatAppearance.BorderSize = 0;
-        _saveButton.BackColor = AccentColor;
-        _saveButton.ForeColor = Color.White;
-        _saveButton.Font = new Font("Segoe UI Semibold", 9.5f, FontStyle.Regular);
-        _saveButton.Cursor = Cursors.Hand;
-        _saveButton.MouseEnter += (_, _) => _saveButton.BackColor = AccentHoverColor;
-        _saveButton.MouseLeave += (_, _) => _saveButton.BackColor = AccentColor;
+        _saveButton.Width = 126;
+        _saveButton.FillColor = AccentColor;
+        _saveButton.HoverFillColor = AccentHoverColor;
+        _saveButton.LabelColor = BackgroundColor;
+        _saveButton.Font = new Font("Segoe UI Semibold", 10f);
         _saveButton.Click += (_, _) => SaveAndClose(discard: false);
         bottomBar.Controls.Add(_saveButton);
 
         _hintLabel.Dock = DockStyle.Fill;
         _hintLabel.TextAlign = ContentAlignment.MiddleLeft;
         _hintLabel.ForeColor = HintColor;
-        _hintLabel.Font = new Font("Segoe UI", 8f);
+        _hintLabel.Font = new Font("Segoe UI", 8.5f);
         _hintLabel.Text = HintText;
         bottomBar.Controls.Add(_hintLabel);
         _hintLabel.BringToFront();
 
-        // Sits above everything else in the card so sparkle particles can be drawn
-        // over the textbox/footer without a container's OnPaint being clipped away
-        // by those opaque sibling controls (see SparkleOverlay for why).
         _sparkleOverlay.Dock = DockStyle.Fill;
         _sparkleOverlay.Paint += SparkleOverlay_Paint;
         content.Controls.Add(_sparkleOverlay);
@@ -358,13 +404,17 @@ public sealed class NoteForm : Form
         }
 
         Invalidate();
-        _sparkleOverlay.Invalidate();
+        RepaintSparkles();
 
         if (t >= 1f && _particles.Count == 0)
         {
             _celebrateTimer.Stop();
         }
     }
+
+    // The overlay no longer paints its own background (that hid the text box border), so
+    // repaint the controls underneath first to wipe the previous frame's particles.
+    private void RepaintSparkles() => _sparkleOverlay.Parent?.Invalidate(_sparkleOverlay.Bounds, true);
 
     private void ResetCelebration()
     {
@@ -373,7 +423,7 @@ public sealed class NoteForm : Form
         _cardGlowColor = BorderColor;
         _textBoxBorder.BackColor = BorderColor;
         Invalidate();
-        _sparkleOverlay.Invalidate();
+        RepaintSparkles();
     }
 
     // Re-color every #tag in the box. Runs on each TextChanged; changing
@@ -448,6 +498,7 @@ public sealed class NoteForm : Form
         Activate();
         _textBox.Focus();
     }
+
 
     private void HideNote()
     {

@@ -17,7 +17,6 @@ internal sealed class SparkleOverlay : Control
     {
         SetStyle(
             ControlStyles.SupportsTransparentBackColor
-            | ControlStyles.OptimizedDoubleBuffer
             | ControlStyles.AllPaintingInWmPaint
             | ControlStyles.UserPaint
             | ControlStyles.ResizeRedraw,
@@ -35,6 +34,11 @@ internal sealed class SparkleOverlay : Control
             return cp;
         }
     }
+
+    // Painting a "transparent" background re-draws the parent's background over the
+    // sibling panels below (hiding the text box border and focus ring), so skip it (and
+    // double buffering, whose buffer would start out opaque).
+    protected override void OnPaintBackground(PaintEventArgs pevent) { }
 
     protected override void WndProc(ref Message m)
     {
