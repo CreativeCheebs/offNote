@@ -4,9 +4,9 @@ Offnote captures notes on desktop and Android, writes each note to a durable loc
 
 ## Architecture
 
-- Qt 6 Widgets (`qt-offnote/`) is the selected desktop UI direction. Its C++ config, routing, connector, and SQLite code is a port of the Tauri client's Rust logic and must stay compatible with `%APPDATA%\QuickNote\config.yaml` and `quicknote.db`. Avalonia is a stopped prototype.
+- Qt 6 Widgets (`qt-offnote/`) is the only desktop client. Keep its `config.yaml` format and `quicknote.db` schema stable so existing user data keeps working; the Android app uses the same config shape.
 - Keep Android platform APIs in Android code: Room, WorkManager, notifications, foreground service, encrypted preferences, and lockscreen activity.
-- Keep desktop platform APIs in `desktopApp/`. The Tauri and WinForms clients remain functional during migration.
+- Keep desktop platform APIs (Win32 hotkey, WinHTTP, registry) in `qt-offnote/`.
 - Do not replace Room or desktop SQLite without a tested migration preserving queued and failed notes.
 - Sidecar credentials stay server-side. Clients store only sidecar URL, token, and connector name. Never log tokens or note contents in diagnostics.
 

@@ -1,6 +1,6 @@
 # Desktop UI memory comparison
 
-Measured on this Windows machine while evaluating Offnote desktop frameworks.
+Measured on this Windows machine while evaluating Offnote desktop frameworks. Qt was chosen and every other desktop client has since been removed from the tree (last present in commit 84e8caa).
 Values are approximate snapshots of **working set** (physical memory resident
 for a process). Working sets include shareable pages, so summing processes is
 useful for comparing app footprints but is not an exact measure of unique RAM.

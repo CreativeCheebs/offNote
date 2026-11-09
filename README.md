@@ -1,6 +1,6 @@
 # Offnote
 
-Desktop framework memory measurements are recorded in
+Why Qt was chosen for the desktop: see
 [`docs/desktop-memory-comparison.md`](docs/desktop-memory-comparison.md).
 
 A quick-capture note app for jotting things down with as little friction as
@@ -10,19 +10,14 @@ Android - with a small save-celebration animation as positive reinforcement
 queue first, then routed by `#tag` to one or more destinations: a markdown
 file, or a self-hosted [AFFiNE](https://affine.pro/) workspace.
 
-There are three client apps sharing one delivery model, plus a small server
+There are two client apps sharing one delivery model, plus a small server
 component for AFFiNE:
 
 | Component | What it is |
 |---|---|
-| `src/` + `src-tauri/` | Desktop app (Windows/Linux/macOS via Tauri) |
-| `winforms-quicknote/` | Windows-only alternative desktop app (WinForms/.NET) |
-| `android-offnote/desktopApp/` | Compose Multiplatform desktop app using the shared Material 3 UI |
-| `avalonia-offnote/` | .NET 10 Avalonia desktop prototype sharing the existing C# note logic |
-| `gtk-offnote/` | Windows GTK 3 capture and memory prototype |
-| `qt-offnote/` | Windows Qt 6 Widgets desktop client (the chosen direction): tray, hotkey, routing, delivery, Settings window |
+| `qt-offnote/` | Windows desktop app (Qt 6 Widgets, C++): tray, global hotkey, routing, delivery, Settings window |
 | `android-offnote/` | Android app (Kotlin) |
-| `android-offnote/shared-ui/` | Shared Compose Multiplatform Material 3 screens for Android and a future JVM desktop host |
+| `android-offnote/shared-ui/` | Shared Compose Multiplatform Material 3 screens used by the Android app |
 | `connectors/affine-sidecar/` | Small server-side HTTP service that talks to AFFiNE |
 | `connectors/setup/` | Interactive CLI to help build a desktop `config.yaml` |
 
@@ -62,76 +57,14 @@ full details, the HTTP API, and how to safely re-run it after an update.
 
 If you only want the markdown connector, you can skip this step entirely.
 
-### 2. Desktop app (Tauri)
-
-```bash
-npm install
-npm run tauri dev      # development
-npm run tauri build    # release build
-```
-
-First run copies `src-tauri/config.yaml` (a template) to
-`%APPDATA%\QuickNote\config.yaml` (Windows) - edit that copy to add
-connections and routing, then use the tray's "Reload Config".
-
-### 2b. Desktop app (WinForms, Windows only)
-
-```bash
-cd winforms-quicknote
-dotnet build
-dotnet run
-```
-
-Shares the same `%APPDATA%\QuickNote\config.yaml` and note database as the
-Tauri app - handy if you want to compare the two or prefer WinForms' native feel.
-The root `launch.bat` and `Offnote.lnk` launch this lighter WinForms app.
-
-### 2c. Desktop app (Compose Multiplatform)
-
-From `android-offnote/`, with a JDK 17 and Gradle dependencies available:
-
-```bash
-./gradlew :desktopApp:run
-```
-
-On Windows, you can also double-click `launch-compose.bat` at the repository
-root. Keep its console open while the app runs.
-
-The Compose desktop app opens from its tray icon or the configured global hotkey
-(`Alt+Space` in the template). It reads and writes the existing
-`%APPDATA%\QuickNote\config.yaml` and `quicknote.db`; existing Tauri and
-WinForms notes remain visible in its outbox. It writes locally before delivery,
-retries pending notes in the background, and supports markdown, Obsidian,
-Logseq, and AFFiNE sidecar destinations. Keep only one desktop client handling
-delivery at a time to avoid two processes attempting the same pending note.
-
-The Compose desktop host currently lacks the older desktop clients' login
-autostart and save celebration. Its shortcut parser currently recognizes Space,
-Enter, and N; other configured keys require adding a key mapping.
-
-### 2d. Desktop app (Avalonia prototype)
-
-The Avalonia capture window reuses WinForms' configuration, routing, connector,
-and SQLite code. Build it with the repository-local .NET 8 SDK:
-
-```powershell
-.\.dotnet10\dotnet.exe build .\avalonia-offnote\Offnote.Avalonia.csproj -c Release
-.\launch-avalonia.bat
-```
-
-This is currently a capture prototype without a tray icon, global hotkey, or
-background retry loop. `launch.bat` still opens WinForms until those behaviors
-are ported. See `avalonia-offnote/README.md` for its scope.
-
-### 2e. Desktop app (Qt, the chosen direction)
+### 2. Desktop app (Qt)
 
 Install MSYS2's `mingw-w64-x86_64-qt6-base` and `mingw-w64-x86_64-yaml-cpp`
 packages, then double-click `launch-qt.bat` at the repository root (it builds
 first). It reads and writes the same `%APPDATA%\QuickNote\config.yaml` and
-`quicknote.db` as the other desktop clients, routes by `#tag`, delivers to
+`quicknote.db` as the earlier desktop clients, routes by `#tag`, delivers to
 markdown, Obsidian, Logseq and the AFFiNE sidecar with background retry, and has
 a Settings window and Outbox view in its tray menu. See `qt-offnote/README.md`.
-Run only one desktop client at a time.
 
 ### 3. Android app
 
@@ -191,7 +124,7 @@ temporarily unreachable.
 ## Interactive setup CLI
 
 ```bash
-npm run setup
+node connectors/setup/setup.js
 ```
 
 Walks through validating an existing `config.yaml` and adding connections

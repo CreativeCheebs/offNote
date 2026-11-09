@@ -2,7 +2,7 @@
 
 A self-contained HTTP service that talks to AFFiNE over its sync API
 (socket.io + Yjs CRDT). This is the **single place AFFiNE credentials
-live** - no Offnote client (Android, Tauri, WinForms) stores an AFFiNE
+live** - no Offnote client (Android and the Qt desktop app) stores an AFFiNE
 email/password/workspace_id anymore; they only know this service's URL, a
 bearer token, and a connector *name*.
 

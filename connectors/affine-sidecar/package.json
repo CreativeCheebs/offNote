@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "private": true,
-  "description": "Self-contained HTTP service exposing POST /append, so Offnote clients (Android, Tauri, WinForms) can deliver notes to AFFiNE without holding credentials or running the Yjs/socket.io sync themselves. Deploy this single directory next to the AFFiNE server; run install.sh.",
+  "description": "Self-contained HTTP service exposing POST /append, so Offnote clients (Android and the Qt desktop app) can deliver notes to AFFiNE without holding credentials or running the Yjs/socket.io sync themselves. Deploy this single directory next to the AFFiNE server; run install.sh.",
   "scripts": {
     "start": "node server.js"
   },

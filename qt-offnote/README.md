@@ -5,9 +5,9 @@ capture window from a global hotkey (`Alt+Space` by default), saves every note t
 the shared durable SQLite outbox first, then routes it by `#tag` and delivers it in
 the background. Start it with `launch-qt.bat` at the repository root.
 
-It reads and writes the same files as the Tauri and WinForms clients:
-`%APPDATA%\QuickNote\config.yaml` and `quicknote.db`. Notes queued by those
-clients stay visible in the Outbox and are delivered by this one.
+It reads and writes `%APPDATA%\QuickNote\config.yaml` and `quicknote.db`, the same files the
+earlier (now removed) Tauri and WinForms clients used, so existing notes and
+config carry over and notes still queued by those clients are delivered by this one.
 
 ## Capture window
 
@@ -27,7 +27,7 @@ Reload config, Quit. The tooltip also shows the number of waiting notes.
 
 ## Routing and delivery
 
-Ported from the Tauri client (`src-tauri/src/lib.rs`), same rules:
+Ported from the Tauri client (`src-tauri/src/lib.rs` in git history, commit 84e8caa), same rules:
 
 - A tag is a `#` at the start of the text or after whitespace, followed by non-space
   characters; trailing punctuation is trimmed. `# heading` is not a tag.

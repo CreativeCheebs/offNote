@@ -38,6 +38,4 @@ android-offnote/app/src/debug/res/xml/network_security_config.xml
 *.sln
 *.sw?
 
-winui-offnote/bin/
-winui-offnote/obj/
 .claude/settings.local.json

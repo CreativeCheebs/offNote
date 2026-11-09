@@ -43,12 +43,12 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
-    // Durable local note store, mirroring src-tauri/src/store.rs
+    // Durable local note store, mirroring the desktop notes table (qt-offnote/store.cpp)
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
 
-    // Background retry delivery, mirroring the Tauri retry_pending loop
+    // Background retry delivery, mirroring the Qt client's retryPending
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     // Encrypted on-device config (connections/routing), mirroring config.yaml

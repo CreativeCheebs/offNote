@@ -1,6 +1,6 @@
 ---
 name: release-readiness
-description: Discover and check Qt, Android, Tauri, WinForms and sidecar release builds.
+description: Discover and check Qt, Android and sidecar release builds.
 ---
 
 # Release Readiness
