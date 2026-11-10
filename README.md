@@ -19,8 +19,16 @@ the note waits and is retried automatically. Nothing is lost.
 
 ## Install the Windows app
 
-There is no installer yet, so the app is built once on your PC (about five
-minutes):
+Download `Offnote-0.1.0-Windows-x64-Setup.exe` from the GitHub Releases page and
+run it. It installs for your Windows user and adds Offnote to the Start menu.
+Your notes and settings remain in `%APPDATA%\QuickNote` when you uninstall.
+
+The release is signed with a local self-signed certificate. Windows may show a
+SmartScreen warning because the certificate is not issued by a trusted authority.
+The portable ZIP is also available on the Releases page; extract the whole folder
+and run `Offnote.exe`.
+
+To build from source instead (about five minutes):
 
 1. Install [MSYS2](https://www.msys2.org/) with the default options.
 2. Open the **MSYS2 MINGW64** terminal and run:

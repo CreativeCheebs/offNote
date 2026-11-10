@@ -84,8 +84,10 @@ behaviour. It runs against a scratch `%APPDATA%`, never the real one. To also ch
 the AFFiNE request, run `python tests/sidecar_stub.py 8799 out.json` and set
 `OFFNOTE_TEST_SIDECAR=http://127.0.0.1:8799` before running the tests.
 
-The app uses Qt, yaml-cpp and compiler DLLs from `C:\msys64\mingw64\bin`, so it is
-not yet a redistributable package (`windeployqt` or a static build is still to do).
+For a redistributable release, run `windeployqt` on the built app, include its
+yaml-cpp, SQLite, and MinGW runtime DLL dependencies, then build the per-user
+installer with `makensis /DVERSION=0.1.0 installer.nsi` from the repository root.
+The installer never removes `%APPDATA%\QuickNote`.
 
 ## Running more than one client
 
