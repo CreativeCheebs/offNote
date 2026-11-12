@@ -19,7 +19,7 @@ the note waits and is retried automatically. Nothing is lost.
 
 ## Install the Windows app
 
-Download `Offnote-0.1.0-Windows-x64-Setup.exe` from the GitHub Releases page and
+Download the latest `Offnote-*-Windows-x64-Setup.exe` from the GitHub Releases page and
 run it. It installs for your Windows user and adds Offnote to the Start menu.
 Your notes and settings remain in `%APPDATA%\QuickNote` when you uninstall.
 

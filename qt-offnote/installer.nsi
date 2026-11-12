@@ -2,7 +2,7 @@ Unicode true
 !include "MUI2.nsh"
 
 !ifndef VERSION
-!define VERSION "0.1.0"
+!define VERSION "0.1.1"
 !endif
 
 Name "Offnote ${VERSION}"
@@ -20,6 +20,16 @@ SetCompressor /SOLID lzma
 Section "Install"
   SetOutPath "$INSTDIR"
   File /r "..\dist\Offnote-Windows-x64\*"
+  ; Preserve the user's autostart choice while replacing a source-build path.
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "OffnoteQt"
+  StrCmp $0 "" +2
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "OffnoteQt" '"$INSTDIR\Offnote.exe"'
+  ; Remove the retired desktop client's startup entry only when it names its old path.
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Offnote"
+  StrCmp $0 "$LOCALAPPDATA\Offnote\offnote.exe" 0 +2
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Offnote"
+  StrCmp $0 "$LOCALAPPDATA\Offnote\offnote.exe " 0 +2
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "Offnote"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateDirectory "$SMPROGRAMS\Offnote"
   CreateShortcut "$SMPROGRAMS\Offnote\Offnote.lnk" "$INSTDIR\Offnote.exe"
@@ -37,6 +47,8 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\Offnote\Uninstall Offnote.lnk"
   RMDir "$SMPROGRAMS\Offnote"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Offnote"
-  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "OffnoteQt"
+  ReadRegStr $0 HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "OffnoteQt"
+  StrCmp $0 '"$INSTDIR\Offnote.exe"' 0 +2
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "OffnoteQt"
   RMDir /r "$INSTDIR"
 SectionEnd
